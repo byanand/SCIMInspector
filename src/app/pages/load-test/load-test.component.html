@@ -1,0 +1,272 @@
+<div class="load-test">
+  <div class="header">
+    <h1>Load Testing</h1>
+    <div class="header-actions">
+      @if (running()) {
+        <button mat-raised-button color="warn" (click)="stopLoadTest()">
+          <mat-icon>stop</mat-icon> Stop Test
+        </button>
+      } @else {
+        <button mat-raised-button color="primary" (click)="startLoadTest()" [disabled]="!serverConfigService.selectedConfig()">
+          <mat-icon>rocket_launch</mat-icon> Start Load Test
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Server Selector -->
+  <mat-card class="server-selector-card">
+    <mat-card-header>
+      <mat-card-title>Target Server</mat-card-title>
+      <button mat-button color="primary" (click)="toggleQuickConnect()">
+        <mat-icon>{{ showQuickConnect() ? 'close' : 'add' }}</mat-icon>
+        {{ showQuickConnect() ? 'Cancel' : 'Quick Add' }}
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      @if (serverConfigService.serverConfigs().length > 0) {
+        <div class="server-select-row">
+          <mat-form-field appearance="outline" class="server-select-field">
+            <mat-label>Select Server Profile</mat-label>
+            <mat-select [ngModel]="serverConfigService.getSelectedId()" (ngModelChange)="onServerChange($event)">
+              @for (config of serverConfigService.serverConfigs(); track config.id) {
+                <mat-option [value]="config.id">
+                  {{ config.name }} — {{ config.base_url }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          @if (serverConfigService.selectedConfig(); as selected) {
+            <div class="selected-server-info">
+              <span class="server-badge">{{ selected.auth_type | uppercase }}</span>
+              <span class="server-url">{{ selected.base_url }}</span>
+            </div>
+          }
+        </div>
+      } @else if (!showQuickConnect()) {
+        <div class="no-servers-prompt">
+          <mat-icon>dns</mat-icon>
+          <p>No server profiles configured. Add one to get started.</p>
+          <button mat-stroked-button color="primary" (click)="toggleQuickConnect()">
+            <mat-icon>add</mat-icon> Add Server
+          </button>
+        </div>
+      }
+
+      @if (showQuickConnect()) {
+        <div class="quick-connect-form">
+          <mat-divider></mat-divider>
+          <h3>Quick Connect</h3>
+          <div class="quick-connect-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Profile Name</mat-label>
+              <input matInput [ngModel]="quickConnect().name"
+                (ngModelChange)="quickConnect.set({...quickConnect(), name: $event})"
+                placeholder="My SCIM Server">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Base URL</mat-label>
+              <input matInput [ngModel]="quickConnect().base_url"
+                (ngModelChange)="quickConnect.set({...quickConnect(), base_url: $event})"
+                placeholder="https://example.com/scim/v2">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Auth Type</mat-label>
+              <mat-select [ngModel]="quickConnect().auth_type"
+                (ngModelChange)="quickConnect.set({...quickConnect(), auth_type: $event})">
+                <mat-option value="bearer">Bearer Token</mat-option>
+                <mat-option value="basic">Basic Auth</mat-option>
+                <mat-option value="apikey">API Key</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Token / Credentials</mat-label>
+              <input matInput [ngModel]="quickConnect().auth_token"
+                (ngModelChange)="quickConnect.set({...quickConnect(), auth_token: $event})"
+                placeholder="Bearer token or API key">
+            </mat-form-field>
+          </div>
+          <div class="quick-connect-actions">
+            <button mat-raised-button color="primary" (click)="saveQuickConnect()">
+              <mat-icon>save</mat-icon> Save & Select
+            </button>
+            <button mat-button (click)="toggleQuickConnect()">Cancel</button>
+          </div>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Configuration -->
+  <mat-card class="config-card">
+    <mat-card-header>
+      <mat-card-title>Test Configuration</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="config-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Total Requests</mat-label>
+          <input matInput type="number" [ngModel]="totalRequests()" (ngModelChange)="totalRequests.set($event)" min="1">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Concurrency</mat-label>
+          <input matInput type="number" [ngModel]="concurrency()" (ngModelChange)="concurrency.set($event)" min="1">
+          <mat-hint>Simultaneous requests</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Ramp-Up (seconds)</mat-label>
+          <input matInput type="number" [ngModel]="rampUpSeconds()" (ngModelChange)="rampUpSeconds.set($event)" min="0">
+          <mat-hint>0 = all at once</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <mat-divider></mat-divider>
+
+      <div class="scenario-section">
+        <h3>Test Scenario</h3>
+        <div class="scenario-cards">
+          @for (s of scenarios; track s.id) {
+            <div class="scenario-card" [class.selected]="selectedScenario() === s.id" (click)="selectScenario(s.id)">
+              <div class="scenario-card-header">
+                <mat-icon>{{ s.icon }}</mat-icon>
+                <span class="scenario-name">{{ s.name }}</span>
+              </div>
+              <p class="scenario-desc">{{ s.description }}</p>
+              <div class="scenario-ops">
+                @for (op of s.operations; track op) {
+                  <span class="op-badge">{{ op }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Progress -->
+  @if (running()) {
+    <mat-card class="progress-card">
+      <mat-card-content>
+        <div class="progress-header">
+          <span class="phase-label">{{ progress()?.phase || 'Running' }}</span>
+          <span>{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
+          <span>{{ progress()?.current_rps | number:'1.1-1' }} req/s</span>
+          @if ((progress()?.error_count ?? 0) > 0) {
+            <span class="error-count">{{ progress()?.error_count }} errors</span>
+          }
+        </div>
+        <mat-progress-bar mode="determinate" [value]="getProgressPercent()"></mat-progress-bar>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Results Summary -->
+  @if (summary()) {
+    <div class="results-summary">
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.total_requests }}</div>
+          <div class="metric-label">Total Requests</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.requests_per_second | number:'1.1-1' }}</div>
+          <div class="metric-label">Requests/sec</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.avg_latency_ms | number:'1.0-0' }}ms</div>
+          <div class="metric-label">Avg Latency</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.p95_latency_ms | number:'1.0-0' }}ms</div>
+          <div class="metric-label">P95 Latency</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="metric-card">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.p99_latency_ms | number:'1.0-0' }}ms</div>
+          <div class="metric-label">P99 Latency</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="metric-card" [class.error-rate]="summary()!.error_rate > 0">
+        <mat-card-content>
+          <div class="metric-value">{{ summary()!.error_rate | number:'1.1-1' }}%</div>
+          <div class="metric-label">Error Rate</div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <div class="latency-details">
+      <mat-card>
+        <mat-card-header><mat-card-title>Latency Breakdown</mat-card-title></mat-card-header>
+        <mat-card-content>
+          <div class="latency-grid">
+            <div class="latency-item">
+              <span class="latency-label">Min</span>
+              <span class="latency-value">{{ summary()!.min_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+            <div class="latency-item">
+              <span class="latency-label">Avg</span>
+              <span class="latency-value">{{ summary()!.avg_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+            <div class="latency-item">
+              <span class="latency-label">P50</span>
+              <span class="latency-value">{{ summary()!.p50_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+            <div class="latency-item">
+              <span class="latency-label">P95</span>
+              <span class="latency-value">{{ summary()!.p95_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+            <div class="latency-item">
+              <span class="latency-label">P99</span>
+              <span class="latency-value">{{ summary()!.p99_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+            <div class="latency-item">
+              <span class="latency-label">Max</span>
+              <span class="latency-value">{{ summary()!.max_latency_ms | number:'1.0-0' }}ms</span>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <mat-card>
+        <mat-card-content>
+          <canvas baseChart
+            [data]="latencyChartData()"
+            [options]="latencyChartOptions"
+            type="bar">
+          </canvas>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card>
+        <mat-card-content>
+          <canvas baseChart
+            [data]="statusChartData()"
+            [options]="statusChartOptions"
+            type="doughnut">
+          </canvas>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  }
+</div>

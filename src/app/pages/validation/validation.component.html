@@ -1,0 +1,318 @@
+<div class="validation">
+  <div class="header">
+    <h1>SCIM Validation</h1>
+    <button mat-raised-button color="primary" (click)="runValidation()" [disabled]="running() || !serverConfigService.selectedConfig()">
+      @if (running()) {
+        <mat-icon>hourglass_empty</mat-icon> Running...
+      } @else {
+        <mat-icon>play_arrow</mat-icon> Run Validation
+      }
+    </button>
+  </div>
+
+  <!-- Server Selector -->
+  <mat-card class="server-selector-card">
+    <mat-card-header>
+      <mat-card-title>Target Server</mat-card-title>
+      <button mat-button color="primary" (click)="toggleQuickConnect()">
+        <mat-icon>{{ showQuickConnect() ? 'close' : 'add' }}</mat-icon>
+        {{ showQuickConnect() ? 'Cancel' : 'Quick Add' }}
+      </button>
+    </mat-card-header>
+    <mat-card-content>
+      @if (serverConfigService.serverConfigs().length > 0) {
+        <div class="server-select-row">
+          <mat-form-field appearance="outline" class="server-select-field">
+            <mat-label>Select Server Profile</mat-label>
+            <mat-select [ngModel]="serverConfigService.getSelectedId()" (ngModelChange)="onServerChange($event)">
+              @for (config of serverConfigService.serverConfigs(); track config.id) {
+                <mat-option [value]="config.id">
+                  {{ config.name }} — {{ config.base_url }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          @if (serverConfigService.selectedConfig(); as selected) {
+            <div class="selected-server-info">
+              <span class="server-badge">{{ selected.auth_type | uppercase }}</span>
+              <span class="server-url">{{ selected.base_url }}</span>
+            </div>
+          }
+        </div>
+      } @else if (!showQuickConnect()) {
+        <div class="no-servers-prompt">
+          <mat-icon>dns</mat-icon>
+          <p>No server profiles configured. Add one to get started.</p>
+          <button mat-stroked-button color="primary" (click)="toggleQuickConnect()">
+            <mat-icon>add</mat-icon> Add Server
+          </button>
+        </div>
+      }
+
+      @if (showQuickConnect()) {
+        <div class="quick-connect-form">
+          <mat-divider></mat-divider>
+          <h3>Quick Connect</h3>
+          <div class="quick-connect-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Profile Name</mat-label>
+              <input matInput [ngModel]="quickConnect().name"
+                (ngModelChange)="quickConnect.set({...quickConnect(), name: $event})"
+                placeholder="My SCIM Server">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Base URL</mat-label>
+              <input matInput [ngModel]="quickConnect().base_url"
+                (ngModelChange)="quickConnect.set({...quickConnect(), base_url: $event})"
+                placeholder="https://example.com/scim/v2">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Auth Type</mat-label>
+              <mat-select [ngModel]="quickConnect().auth_type"
+                (ngModelChange)="quickConnect.set({...quickConnect(), auth_type: $event})">
+                <mat-option value="bearer">Bearer Token</mat-option>
+                <mat-option value="basic">Basic Auth</mat-option>
+                <mat-option value="apikey">API Key</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Token / Credentials</mat-label>
+              <input matInput [ngModel]="quickConnect().auth_token"
+                (ngModelChange)="quickConnect.set({...quickConnect(), auth_token: $event})"
+                placeholder="Bearer token or API key">
+            </mat-form-field>
+          </div>
+          <div class="quick-connect-actions">
+            <button mat-raised-button color="primary" (click)="saveQuickConnect()">
+              <mat-icon>save</mat-icon> Save & Select
+            </button>
+            <button mat-button (click)="toggleQuickConnect()">Cancel</button>
+          </div>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Category Selection -->
+  <mat-card class="categories-card">
+    <mat-card-header>
+      <mat-card-title>Test Categories</mat-card-title>
+      <div class="toggle-all">
+        <button mat-button (click)="toggleAll(true)">Select All</button>
+        <button mat-button (click)="toggleAll(false)">Deselect All</button>
+      </div>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="category-grid">
+        @for (cat of categories(); track cat.key; let i = $index) {
+          <mat-checkbox [checked]="cat.enabled" (change)="toggleCategory(i)">
+            {{ cat.label }}
+          </mat-checkbox>
+        }
+      </div>
+
+      <!-- Custom Schema Discovery -->
+      <div class="custom-schema-section">
+        <div class="custom-schema-header">
+          <button mat-stroked-button color="primary" (click)="discoverCustomAttributes()" [disabled]="discoveryLoading()">
+            <mat-icon>{{ discoveryLoading() ? 'hourglass_empty' : 'search' }}</mat-icon>
+            <span>{{ discoveryLoading() ? 'Discovering...' : 'Discover Custom Attributes' }}</span>
+          </button>
+          <span class="custom-schema-hint">Fetches extension schemas from /Schemas endpoint</span>
+        </div>
+
+        @if (discoveryLoaded() && discoveredAttrs().length > 0) {
+          <div class="discovered-attrs">
+            <div class="discovered-label">
+              <mat-icon>extension</mat-icon>
+              <span>{{ discoveredAttrs().length }} custom attribute(s) found &mdash;
+                {{ discoveredTestCount() }} tests will run</span>
+            </div>
+            <div class="attr-chips">
+              @for (attr of discoveredAttrs(); track attr.attr_name + attr.schema_urn) {
+                <span class="attr-chip" [class.attr-boolean]="attr.attr_type === 'boolean'">
+                  <span class="attr-name">{{ attr.attr_name }}</span>
+                  <span class="attr-type">{{ attr.attr_type }}</span>
+                  @if (attr.attr_type === 'boolean') {
+                    <span class="attr-badge">2 tests</span>
+                  }
+                </span>
+              }
+            </div>
+            <div class="schema-detail">
+              @for (urn of getUniqueSchemaUrns(); track urn) {
+                <div class="schema-urn">
+                  <mat-icon>schema</mat-icon>
+                  <code>{{ urn }}</code>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        @if (discoveryLoaded() && discoveredAttrs().length === 0) {
+          <div class="no-attrs-found">
+            <mat-icon>info</mat-icon>
+            <span>No custom/extension schema attributes found. Only core SCIM schemas are present.</span>
+          </div>
+        }
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Progress -->
+  @if (running()) {
+    <mat-card class="progress-card">
+      <mat-card-content>
+        <div class="progress-info">
+          <span class="progress-label">{{ progress()?.current_test }}</span>
+          <span class="progress-count">{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
+        </div>
+        <mat-progress-bar mode="determinate" [value]="getProgressPercent()"></mat-progress-bar>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- Summary -->
+  @if (summary()) {
+    <div class="summary-section">
+      <mat-card class="score-card">
+        <mat-card-content>
+          <div class="score" [style.color]="getScoreColor(summary()!.compliance_score)">
+            {{ summary()!.compliance_score | number:'1.1-1' }}%
+          </div>
+          <div class="score-label">Compliance Score</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="stat-card pass">
+        <mat-card-content>
+          <mat-icon>check_circle</mat-icon>
+          <div class="stat-value">{{ summary()!.passed }}</div>
+          <div class="stat-label">Passed</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="stat-card fail">
+        <mat-card-content>
+          <mat-icon>cancel</mat-icon>
+          <div class="stat-value">{{ summary()!.failed }}</div>
+          <div class="stat-label">Failed</div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="stat-card skip">
+        <mat-card-content>
+          <mat-icon>remove_circle</mat-icon>
+          <div class="stat-value">{{ summary()!.skipped }}</div>
+          <div class="stat-label">Skipped</div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <!-- Category Breakdown -->
+    @if (summary()!.categories && summary()!.categories.length > 0) {
+      <mat-card class="category-breakdown-card">
+        <mat-card-header>
+          <mat-card-title>Category Breakdown</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @for (cat of summary()!.categories; track cat.name) {
+            <div class="category-row">
+              <span class="cat-name">{{ cat.name }}</span>
+              <div class="cat-bar-container">
+                <div class="cat-bar" [style.width.%]="cat.total > 0 ? (cat.passed / cat.total) * 100 : 0"
+                     [style.background-color]="getScoreColor(cat.total > 0 ? (cat.passed / cat.total) * 100 : 0)">
+                </div>
+              </div>
+              <span class="cat-score">{{ cat.passed }}/{{ cat.total }}</span>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  }
+
+  <!-- Results Table -->
+  @if (results().length > 0) {
+    <mat-card class="results-card">
+      <mat-card-header>
+        <mat-card-title>Detailed Results</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-accordion>
+          @for (result of results(); track result.id) {
+            <mat-expansion-panel>
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon [style.color]="getStatusColor(result.passed ? 'pass' : 'fail')">
+                    {{ getStatusIcon(result.passed ? 'pass' : 'fail') }}
+                  </mat-icon>
+                  <span class="test-name">{{ result.test_name }}</span>
+                </mat-panel-title>
+                <mat-panel-description>
+                  <span class="test-category">{{ result.category }}</span>
+                  <span class="test-duration">{{ result.duration_ms }}ms</span>
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <div class="result-detail">
+                @if (result.failure_reason) {
+                  <div class="detail-row">
+                    <strong>Message:</strong>
+                    <span>{{ result.failure_reason }}</span>
+                  </div>
+                }
+                @if (result.response_status) {
+                  <div class="detail-row">
+                    <strong>HTTP Status:</strong>
+                    <span>{{ result.response_status }}</span>
+                  </div>
+                }
+                @if (result.url) {
+                  <div class="detail-row">
+                    <strong>Request URL:</strong>
+                    <code>{{ result.url }}</code>
+                  </div>
+                }
+                @if (result.http_method) {
+                  <div class="detail-row">
+                    <strong>Method:</strong>
+                    <span>{{ result.http_method }}</span>
+                  </div>
+                }
+
+                <!-- Curl Command -->
+                <div class="curl-section">
+                  <div class="curl-header">
+                    <strong>Curl Command:</strong>
+                    <button mat-icon-button (click)="copyCurl(result)" matTooltip="Copy curl">
+                      <mat-icon>content_copy</mat-icon>
+                    </button>
+                  </div>
+                  <pre class="curl-block">{{ getCurlCommand(result) }}</pre>
+                </div>
+
+                @if (result.request_body) {
+                  <div class="detail-row">
+                    <strong>Request Body:</strong>
+                    <pre class="response-body">{{ result.request_body }}</pre>
+                  </div>
+                }
+                @if (result.response_body) {
+                  <div class="detail-row">
+                    <strong>Response:</strong>
+                    <pre class="response-body">{{ result.response_body }}</pre>
+                  </div>
+                }
+              </div>
+            </mat-expansion-panel>
+          }
+        </mat-accordion>
+      </mat-card-content>
+    </mat-card>
+  }
+</div>

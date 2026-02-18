@@ -1,0 +1,449 @@
+<div class="explorer-page">
+  <h2>SCIM Explorer</h2>
+  <p class="subtitle">Send pre-filled SCIM 2.0 requests — edit anything before sending.</p>
+
+  <!-- Server Picker -->
+  <mat-card class="server-picker-card">
+    <mat-card-content>
+      <mat-form-field appearance="outline" class="server-select">
+        <mat-label>Target Server</mat-label>
+        <mat-select
+          [value]="selectedServer()"
+          (selectionChange)="selectServer($event.value)"
+        >
+          @for (server of serverConfigService.serverConfigs(); track server.id) {
+            <mat-option [value]="server">
+              {{ server.name }} — {{ server.base_url }}
+            </mat-option>
+          }
+        </mat-select>
+        <mat-icon matPrefix>dns</mat-icon>
+      </mat-form-field>
+      @if (!selectedServer()) {
+        <p class="server-hint">Select a server to start exploring SCIM operations.</p>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  @if (selectedServer()) {
+
+  <!-- Operation Picker -->
+  <mat-card class="operations-card">
+    <mat-card-content>
+      <div class="operation-section">
+        <h3><mat-icon>person</mat-icon> User Operations</h3>
+        <div class="operation-chips">
+          @for (op of userOps; track op.id) {
+            <button
+              mat-stroked-button
+              class="operation-chip"
+              [class.selected]="selectedOperation()?.id === op.id"
+              [matTooltip]="op.description"
+              (click)="selectOperation(op)"
+            >
+              <mat-icon>{{ op.icon }}</mat-icon>
+              {{ op.name }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <mat-divider></mat-divider>
+
+      <div class="operation-section">
+        <h3><mat-icon>group</mat-icon> Group Operations</h3>
+        <div class="operation-chips">
+          @for (op of groupOps; track op.id) {
+            <button
+              mat-stroked-button
+              class="operation-chip"
+              [class.selected]="selectedOperation()?.id === op.id"
+              [matTooltip]="op.description"
+              (click)="selectOperation(op)"
+            >
+              <mat-icon>{{ op.icon }}</mat-icon>
+              {{ op.name }}
+            </button>
+          }
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Request / Response Split -->
+  @if (selectedOperation()) {
+    <div class="request-response-container">
+      <!-- Left: Request Panel -->
+      <mat-card class="request-panel">
+        <mat-card-header>
+          <mat-card-title>Request</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+
+          <!-- Method + Path -->
+          <div class="method-path-row">
+            <mat-form-field appearance="outline" class="method-field">
+              <mat-label>Method</mat-label>
+              <mat-select [value]="httpMethod()" (selectionChange)="httpMethod.set($event.value)">
+                <mat-option value="GET">GET</mat-option>
+                <mat-option value="POST">POST</mat-option>
+                <mat-option value="PUT">PUT</mat-option>
+                <mat-option value="PATCH">PATCH</mat-option>
+                <mat-option value="DELETE">DELETE</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="path-field">
+              <mat-label>Path</mat-label>
+              <input matInput [ngModel]="requestPath()" (ngModelChange)="requestPath.set($event)" />
+            </mat-form-field>
+          </div>
+
+          <!-- Resource ID picker -->
+          @if (selectedOperation()!.needsId) {
+            <div class="id-picker-row">
+              @if (selectedOperation()!.category === 'user' || !selectedOperation()!.needsGroupId) {
+                <mat-form-field appearance="outline" class="id-field">
+                  <mat-label>User / Resource ID</mat-label>
+                  @if (availableUsers().length > 0) {
+                    <mat-select
+                      [value]="resourceId()"
+                      (selectionChange)="onResourceIdChange($event.value)"
+                    >
+                      @for (u of availableUsers(); track u.id) {
+                        <mat-option [value]="u.id">
+                          {{ u.displayName || u.userName }} ({{ u.id | slice:0:8 }}…)
+                        </mat-option>
+                      }
+                    </mat-select>
+                  } @else {
+                    <input
+                      matInput
+                      placeholder="Enter resource ID"
+                      [ngModel]="resourceId()"
+                      (ngModelChange)="onResourceIdChange($event)"
+                    />
+                  }
+                  <mat-hint>
+                    @if (fetchingUsers()) {
+                      <mat-spinner diameter="14"></mat-spinner> Fetching users…
+                    } @else if (availableUsers().length === 0) {
+                      Run List Users to auto-populate
+                    }
+                  </mat-hint>
+                </mat-form-field>
+              }
+
+              @if (selectedOperation()!.needsGroupId) {
+                <mat-form-field appearance="outline" class="id-field">
+                  <mat-label>Group ID</mat-label>
+                  @if (availableGroups().length > 0) {
+                    <mat-select
+                      [value]="resourceId()"
+                      (selectionChange)="onResourceIdChange($event.value)"
+                    >
+                      @for (g of availableGroups(); track g.id) {
+                        <mat-option [value]="g.id">
+                          {{ g.displayName }} ({{ g.id | slice:0:8 }}…)
+                        </mat-option>
+                      }
+                    </mat-select>
+                  } @else {
+                    <input
+                      matInput
+                      placeholder="Enter group ID"
+                      [ngModel]="resourceId()"
+                      (ngModelChange)="onResourceIdChange($event)"
+                    />
+                  }
+                  <mat-hint>
+                    @if (fetchingGroups()) {
+                      <mat-spinner diameter="14"></mat-spinner> Fetching groups…
+                    } @else if (availableGroups().length === 0) {
+                      Run List Groups to auto-populate
+                    }
+                  </mat-hint>
+                </mat-form-field>
+              }
+            </div>
+          }
+
+          <!-- Query params -->
+          @if (queryParams()) {
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Query Parameters</mat-label>
+              <input matInput [ngModel]="queryParams()" (ngModelChange)="queryParams.set($event)" />
+              <mat-hint>e.g. startIndex=1&amp;count=10</mat-hint>
+            </mat-form-field>
+          }
+
+          <!-- Custom Field Mappings -->
+          @if (hasBody() && applicableRules().length > 0) {
+            <div class="custom-fields-section">
+              <div class="custom-fields-header">
+                <span>
+                  <mat-icon>account_tree</mat-icon>
+                  Custom Fields
+                  <span class="field-count">({{ applicableRules().length }})</span>
+                </span>
+                <button
+                  mat-button
+                  color="primary"
+                  (click)="applyAllCustomFields()"
+                  matTooltip="Add all custom fields to request body"
+                >
+                  <mat-icon>playlist_add</mat-icon> Apply All
+                </button>
+              </div>
+              <div class="custom-field-chips">
+                @for (rule of applicableRules(); track rule.id) {
+                  <button
+                    mat-stroked-button
+                    class="custom-field-chip"
+                    [class.enabled]="isFieldEnabled(rule.id)"
+                    [matTooltip]="rule.description || (rule.scim_attribute + ' (' + rule.format + ')')"
+                    (click)="toggleCustomField(rule)"
+                  >
+                    @if (isFieldEnabled(rule.id)) {
+                      <mat-icon>check_circle</mat-icon>
+                    } @else {
+                      <mat-icon>add_circle_outline</mat-icon>
+                    }
+                    {{ rule.display_name }}
+                    @if (rule.required) {
+                      <span class="required-badge">*</span>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Schema Discovery -->
+          @if (hasBody()) {
+            <div class="schema-discovery-section">
+              <div class="custom-fields-header">
+                <span>
+                  <mat-icon>schema</mat-icon>
+                  Schema Attributes
+                  @if (discoveredAttributes().length > 0) {
+                    <span class="field-count">({{ discoveredAttributes().length }})</span>
+                  }
+                </span>
+                <div class="schema-actions">
+                  @if (discoveredAttributes().length > 0) {
+                    <button
+                      mat-button
+                      color="primary"
+                      (click)="applyAllSchemaAttrs()"
+                      matTooltip="Add all discovered attributes to request body"
+                    >
+                      <mat-icon>playlist_add</mat-icon> Apply All
+                    </button>
+                  }
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    (click)="loadSchemaAttributes()"
+                    [disabled]="loadingSchema()"
+                    matTooltip="Discover attributes from the server's /Schemas endpoint"
+                  >
+                    @if (loadingSchema()) {
+                      <mat-spinner diameter="18"></mat-spinner>
+                    } @else {
+                      <mat-icon>cloud_download</mat-icon>
+                    }
+                    {{ schemaLoaded() ? 'Reload' : 'Load from Server' }}
+                  </button>
+                </div>
+              </div>
+              @if (discoveredAttributes().length > 0) {
+                <div class="custom-field-chips">
+                  @for (attr of discoveredAttributes(); track schemaAttrKey(attr)) {
+                    <button
+                      mat-stroked-button
+                      class="custom-field-chip schema-chip"
+                      [class.enabled]="isSchemaAttrEnabled(attr)"
+                      [matTooltip]="attr.schema_urn + ' → ' + attr.attr_name + ' (' + attr.attr_type + ')'"
+                      (click)="toggleSchemaAttr(attr)"
+                    >
+                      @if (isSchemaAttrEnabled(attr)) {
+                        <mat-icon>check_circle</mat-icon>
+                      } @else {
+                        <mat-icon>add_circle_outline</mat-icon>
+                      }
+                      {{ attr.attr_name }}
+                      <span class="attr-type-badge">{{ attr.attr_type }}</span>
+                    </button>
+                  }
+                </div>
+              } @else if (schemaLoaded()) {
+                <p class="schema-empty-hint">No extension attributes found in server schemas.</p>
+              } @else {
+                <p class="schema-empty-hint">Click "Load from Server" to discover attributes from the SCIM /Schemas endpoint.</p>
+              }
+            </div>
+          }
+
+          <!-- Body editor -->
+          @if (hasBody()) {
+            <div class="body-editor-header">
+              <span>Request Body (JSON)</span>
+              <div class="body-actions">
+                @if (selectedOperation()?.aiGeneratable && hasOpenAiKey()) {
+                  <button
+                    mat-button
+                    color="accent"
+                    (click)="generateWithAi()"
+                    [disabled]="generating()"
+                    matTooltip="Generate realistic data with AI"
+                  >
+                    @if (generating()) {
+                      <mat-spinner diameter="18"></mat-spinner>
+                    } @else {
+                      <mat-icon>auto_awesome</mat-icon>
+                    }
+                    Auto-Generate
+                  </button>
+                }
+                <button mat-button (click)="formatBody()" matTooltip="Format JSON">
+                  <mat-icon>code</mat-icon> Format
+                </button>
+              </div>
+            </div>
+            <textarea
+              class="body-textarea"
+              [ngModel]="requestBody()"
+              (ngModelChange)="requestBody.set($event)"
+              rows="14"
+              spellcheck="false"
+            ></textarea>
+          }
+
+          <!-- Send button -->
+          <div class="send-row">
+            <button
+              mat-flat-button
+              color="primary"
+              class="send-btn"
+              (click)="sendRequest()"
+              [disabled]="loading()"
+            >
+              @if (loading()) {
+                <mat-spinner diameter="20"></mat-spinner>
+              } @else {
+                <mat-icon>send</mat-icon>
+              }
+              Send Request
+            </button>
+
+            <button
+              mat-button
+              (click)="showHistory.set(!showHistory())"
+              [matBadge]="sessionHistory().length || null"
+              matBadgeColor="accent"
+              matBadgeSize="small"
+            >
+              <mat-icon>history</mat-icon>
+              History
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- Right: Response Panel -->
+      <mat-card class="response-panel">
+        <mat-card-header>
+          <mat-card-title>Response</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          @if (loading()) {
+            <div class="response-loading">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p>Sending request…</p>
+            </div>
+          } @else if (response()) {
+            <!-- Status bar -->
+            <div class="status-bar" [class]="statusClass()">
+              <span class="status-code">{{ response()!.status }}</span>
+              <span class="status-text">{{ response()!.status_text }}</span>
+              <span class="duration">{{ response()!.duration_ms }}ms</span>
+              <button
+                mat-icon-button
+                matTooltip="Copy response body"
+                (click)="copyToClipboard(responseBodyFormatted())"
+              >
+                <mat-icon>content_copy</mat-icon>
+              </button>
+            </div>
+
+            <div class="request-url">{{ response()!.request_url }}</div>
+
+            <mat-tab-group>
+              <mat-tab label="Body">
+                <pre class="response-body">{{ responseBodyFormatted() }}</pre>
+              </mat-tab>
+              <mat-tab>
+                <ng-template mat-tab-label>
+                  Headers ({{ responseHeaderEntries().length }})
+                </ng-template>
+                <div class="response-headers">
+                  @for (h of responseHeaderEntries(); track h[0]) {
+                    <div class="header-row">
+                      <span class="header-key">{{ h[0] }}</span>
+                      <span class="header-value">{{ h[1] }}</span>
+                    </div>
+                  }
+                </div>
+              </mat-tab>
+            </mat-tab-group>
+          } @else {
+            <div class="response-placeholder">
+              <mat-icon>cloud_queue</mat-icon>
+              <p>Select an operation and click Send to see the response here.</p>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    </div>
+  }
+
+  <!-- Session History -->
+  @if (showHistory()) {
+    <mat-card class="history-card">
+      <mat-card-header>
+        <mat-card-title>Session History</mat-card-title>
+        @if (sessionHistory().length > 0) {
+          <button mat-button color="warn" (click)="clearHistory()">
+            <mat-icon>delete_sweep</mat-icon> Clear
+          </button>
+        }
+      </mat-card-header>
+      <mat-card-content>
+        @if (sessionHistory().length > 0) {
+          <div class="history-list">
+            @for (entry of sessionHistory(); track entry.id) {
+              <button class="history-entry" (click)="loadHistoryEntry(entry)">
+                <span class="history-method" [style.color]="getMethodColor(entry.method)">
+                  {{ entry.method }}
+                </span>
+                <span class="history-path">{{ entry.path }}</span>
+                <span class="history-status" [class]="'status-' + (entry.response.status >= 200 && entry.response.status < 300 ? '2xx' : entry.response.status >= 400 && entry.response.status < 500 ? '4xx' : '5xx')">
+                  {{ entry.response.status }}
+                </span>
+                <span class="history-time">{{ formatTime(entry.timestamp) }}</span>
+              </button>
+            }
+          </div>
+        } @else {
+          <div class="history-empty">
+            <mat-icon>history</mat-icon>
+            <p>No requests yet. Send a request and it will appear here.</p>
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+
+  } <!-- end @if selectedServer -->
+</div>

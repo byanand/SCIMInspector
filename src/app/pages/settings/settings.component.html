@@ -1,0 +1,145 @@
+<div class="settings">
+  <h1>Settings</h1>
+
+  <!-- Appearance -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>palette</mat-icon> Appearance
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Dark Mode</span>
+          <span class="setting-description">Switch between light and dark theme</span>
+        </div>
+        <mat-slide-toggle
+          [checked]="themeService.darkMode()"
+          (change)="themeService.toggle()">
+        </mat-slide-toggle>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- AI Integration -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>auto_awesome</mat-icon> AI Integration
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">OpenAI API Key</span>
+          <span class="setting-description">
+            Used in SCIM Explorer to auto-generate realistic user and group data (GPT-4o-mini).
+            @if (openaiKeyConfigured()) {
+              <span class="key-status configured">Configured: {{ openaiKeyMasked() }}</span>
+            } @else {
+              <span class="key-status not-configured">Not configured</span>
+            }
+          </span>
+        </div>
+      </div>
+      <div class="ai-key-form">
+        <mat-form-field appearance="outline" class="key-input">
+          <mat-label>API Key</mat-label>
+          <input matInput
+            [type]="showOpenaiKey() ? 'text' : 'password'"
+            [value]="openaiKey()"
+            (input)="openaiKey.set($any($event.target).value)"
+            placeholder="sk-...">
+          <button mat-icon-button matSuffix (click)="showOpenaiKey.set(!showOpenaiKey())">
+            <mat-icon>{{ showOpenaiKey() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+        </mat-form-field>
+        <div class="ai-key-actions">
+          <button mat-raised-button color="primary" (click)="saveOpenAiKey()" [disabled]="savingKey()">
+            @if (savingKey()) {
+              <mat-spinner diameter="18"></mat-spinner>
+            } @else {
+              <mat-icon>save</mat-icon>
+            }
+            Save
+          </button>
+          <button mat-stroked-button (click)="testOpenAiKey()" [disabled]="testingKey() || !openaiKeyConfigured()">
+            @if (testingKey()) {
+              <mat-spinner diameter="18"></mat-spinner>
+            } @else {
+              <mat-icon>science</mat-icon>
+            }
+            Test
+          </button>
+          @if (openaiKeyConfigured()) {
+            <button mat-stroked-button color="warn" (click)="removeOpenAiKey()">
+              <mat-icon>delete</mat-icon> Remove
+            </button>
+          }
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Data Management -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>storage</mat-icon> Data Management
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Clear All Data</span>
+          <span class="setting-description">Delete all server profiles, test runs, and results from the local database</span>
+        </div>
+        <div class="clear-actions">
+          @if (confirmingClear()) {
+            <span class="confirm-text">Are you sure?</span>
+            <button mat-raised-button color="warn" (click)="clearAllData()">
+              <mat-icon>delete_forever</mat-icon> Yes, Clear
+            </button>
+            <button mat-button (click)="cancelClear()">Cancel</button>
+          } @else {
+            <button mat-stroked-button color="warn" (click)="clearAllData()">
+              <mat-icon>delete_sweep</mat-icon> Clear Data
+            </button>
+          }
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- About -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>info</mat-icon> About
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="about-content">
+        <h2>SCIM Inspector</h2>
+        <p class="version">Version 1.0.0</p>
+        <p>A desktop application for validating SCIM 2.0 server compliance and load testing SCIM endpoints.</p>
+        <mat-divider></mat-divider>
+        <div class="about-details">
+          <div class="detail-row">
+            <span>Built with</span>
+            <span>Tauri 2 + Angular + Rust</span>
+          </div>
+          <div class="detail-row">
+            <span>SCIM Version</span>
+            <span>2.0 (RFC 7643 / 7644)</span>
+          </div>
+          <div class="detail-row">
+            <span>Platform</span>
+            <span>Windows / macOS / Linux</span>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

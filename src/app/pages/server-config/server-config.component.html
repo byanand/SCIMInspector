@@ -1,0 +1,133 @@
+<div class="server-config">
+  <div class="header">
+    <h1>Server Configuration</h1>
+    <button mat-raised-button color="primary" (click)="newConfig()">
+      <mat-icon>add</mat-icon> New Server
+    </button>
+  </div>
+
+  <div class="config-layout">
+    <!-- Server List -->
+    <mat-card class="config-list-card">
+      <mat-card-header>
+        <mat-card-title>Saved Profiles</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (configs().length === 0) {
+          <p class="empty-state">No server profiles yet. Click "New Server" to add one.</p>
+        } @else {
+          <mat-nav-list>
+            @for (config of configs(); track config.id) {
+              <mat-list-item (click)="editConfig(config)">
+                <mat-icon matListItemIcon>dns</mat-icon>
+                <span matListItemTitle>{{ config.name }}</span>
+                <span matListItemLine>{{ config.base_url }}</span>
+                <div matListItemMeta class="list-actions">
+                  <button mat-icon-button (click)="selectConfig(config.id); $event.stopPropagation()"
+                    matTooltip="Select as active"
+                    [color]="serverConfigService.getSelectedId() === config.id ? 'primary' : ''">
+                    <mat-icon>{{ serverConfigService.getSelectedId() === config.id ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="deleteConfig(config.id); $event.stopPropagation()">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </mat-list-item>
+            }
+          </mat-nav-list>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Edit Form -->
+    @if (editing()) {
+      <mat-card class="edit-form-card">
+        <mat-card-header>
+          <mat-card-title>{{ formData().id ? 'Edit' : 'New' }} Server Profile</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="form-grid">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Profile Name</mat-label>
+              <input matInput [ngModel]="formData().name" (ngModelChange)="updateFormField('name', $event)" placeholder="My SCIM Server">
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Base URL</mat-label>
+              <input matInput [ngModel]="formData().base_url" (ngModelChange)="updateFormField('base_url', $event)" placeholder="https://scim.example.com/v2">
+              <mat-hint>SCIM 2.0 base endpoint URL</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Authentication Type</mat-label>
+              <mat-select [ngModel]="formData().auth_type" (ngModelChange)="updateFormField('auth_type', $event)">
+                <mat-option value="bearer">OAuth 2.0 Bearer Token</mat-option>
+                <mat-option value="basic">Basic Auth</mat-option>
+                <mat-option value="apikey">API Key</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            @if (formData().auth_type === 'bearer') {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Bearer Token</mat-label>
+                <input matInput type="password" [ngModel]="formData().auth_token" (ngModelChange)="updateFormField('auth_token', $event)" placeholder="eyJhbGciOi...">
+              </mat-form-field>
+            }
+
+            @if (formData().auth_type === 'basic') {
+              <mat-form-field appearance="outline">
+                <mat-label>Username</mat-label>
+                <input matInput [ngModel]="formData().auth_username" (ngModelChange)="updateFormField('auth_username', $event)">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Password</mat-label>
+                <input matInput type="password" [ngModel]="formData().auth_password" (ngModelChange)="updateFormField('auth_password', $event)">
+              </mat-form-field>
+            }
+
+            @if (formData().auth_type === 'apikey') {
+              <mat-form-field appearance="outline">
+                <mat-label>Header Name</mat-label>
+                <input matInput [ngModel]="formData().api_key_header" (ngModelChange)="updateFormField('api_key_header', $event)" placeholder="X-API-Key">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>API Key Value</mat-label>
+                <input matInput type="password" [ngModel]="formData().api_key_value" (ngModelChange)="updateFormField('api_key_value', $event)">
+              </mat-form-field>
+            }
+          </div>
+
+          @if (connectionResult()) {
+            <div class="connection-result" [class.success]="connectionResult()!.success" [class.failure]="!connectionResult()!.success">
+              <mat-icon>{{ connectionResult()!.success ? 'check_circle' : 'error' }}</mat-icon>
+              <div>
+                <strong>{{ connectionResult()!.success ? 'Connection Successful' : 'Connection Failed' }}</strong>
+                @if (connectionResult()!.status_code) {
+                  <span> (HTTP {{ connectionResult()!.status_code }})</span>
+                }
+                <span> - {{ connectionResult()!.duration_ms }}ms</span>
+                @if (connectionResult()!.error) {
+                  <p class="error-detail">{{ connectionResult()!.error }}</p>
+                }
+              </div>
+            </div>
+          }
+        </mat-card-content>
+        <mat-card-actions align="end">
+          <button mat-button (click)="cancelEdit()">Cancel</button>
+          <button mat-stroked-button (click)="testConnection()" [disabled]="testing()">
+            @if (testing()) {
+              <mat-spinner diameter="20"></mat-spinner>
+            } @else {
+              <mat-icon>wifi_tethering</mat-icon>
+            }
+            Test Connection
+          </button>
+          <button mat-raised-button color="primary" (click)="saveConfig()">
+            <mat-icon>save</mat-icon> Save
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    }
+  </div>
+</div>

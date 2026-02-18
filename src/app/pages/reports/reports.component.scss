@@ -1,0 +1,454 @@
+.reports {
+  padding: 32px;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 20px;
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+
+      .filter-field {
+        width: 160px;
+      }
+    }
+  }
+
+  .comparison-card {
+    margin-bottom: 24px;
+
+    mat-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    mat-card-content {
+      padding: 16px;
+    }
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px;
+    color: rgba(0, 0, 0, 0.38);
+
+    mat-icon {
+      font-size: 64px;
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+    }
+
+    p {
+      font-size: 16px;
+      text-align: center;
+    }
+  }
+
+  .clickable-row {
+    cursor: pointer;
+    transition: background-color 0.15s;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.04);
+    }
+  }
+
+  .runs-table {
+    width: 100%;
+
+    .summary-cell {
+      font-size: 13px;
+      font-family: monospace;
+    }
+
+    td.mat-column-actions {
+      white-space: nowrap;
+    }
+  }
+
+  .status-chip {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: capitalize;
+
+    &[data-status="completed"] {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    &[data-status="failed"] {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    &[data-status="running"] {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    &[data-status="cancelled"] {
+      background: #fff3e0;
+      color: #e65100;
+    }
+  }
+
+  // ── Detail View ──
+
+  .detail-view {
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .detail-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 28px;
+
+    .detail-title-block {
+      flex: 1;
+
+      h1 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 6px 0;
+        font-size: 24px;
+        font-weight: 500;
+      }
+
+      .detail-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+
+        .meta-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 13px;
+          color: rgba(0, 0, 0, 0.54);
+
+          mat-icon {
+            font-size: 16px;
+            width: 16px;
+            height: 16px;
+          }
+        }
+      }
+    }
+
+    .detail-header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+  }
+
+  // ── Metric Cards ──
+
+  .results-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .metric-card {
+    text-align: center;
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+
+      &.success { color: #4caf50; }
+      &.error { color: #f44336; }
+    }
+
+    .metric-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: rgba(0, 0, 0, 0.54);
+      margin-top: 4px;
+    }
+
+    &.error-rate .metric-value {
+      color: #f44336;
+    }
+  }
+
+  // ── Validation Detail ──
+
+  .category-card {
+    margin-bottom: 12px;
+
+    .category-header {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.02);
+      }
+
+      mat-card-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 16px;
+      }
+    }
+
+    .category-stats {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+
+      .cat-pass { color: #4caf50; font-weight: 500; }
+      .cat-fail { color: #f44336; font-weight: 500; }
+      .cat-rate {
+        background: rgba(0, 0, 0, 0.06);
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .test-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .test-result-item {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+
+    &.passed { border-left-color: #4caf50; background: rgba(76, 175, 80, 0.04); }
+    &.failed { border-left-color: #f44336; background: rgba(244, 67, 54, 0.04); }
+
+    .test-result-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .pass-icon { color: #4caf50; font-size: 18px; width: 18px; height: 18px; }
+      .fail-icon { color: #f44336; font-size: 18px; width: 18px; height: 18px; }
+
+      .test-name {
+        flex: 1;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .test-duration {
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.45);
+        font-family: monospace;
+      }
+    }
+
+    .failure-reason {
+      margin: 6px 0 0 26px;
+      padding: 6px 10px;
+      background: rgba(244, 67, 54, 0.06);
+      border-radius: 4px;
+      font-size: 13px;
+      color: #c62828;
+      font-family: monospace;
+      word-break: break-word;
+    }
+
+    .test-request-info {
+      margin-top: 4px;
+      margin-left: 26px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+
+      .http-badge {
+        display: inline-block;
+        background: #e3f2fd;
+        color: #1565c0;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-family: monospace;
+        font-size: 11px;
+      }
+
+      .request-url {
+        color: rgba(0, 0, 0, 0.54);
+        font-family: monospace;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 400px;
+      }
+
+      .response-status {
+        font-family: monospace;
+        font-weight: 600;
+
+        &.status-ok { color: #2e7d32; }
+        &.status-err { color: #c62828; }
+      }
+    }
+  }
+
+  // ── Load Test Latency / Charts ──
+
+  .latency-detail-card {
+    margin-bottom: 24px;
+  }
+
+  .latency-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 16px;
+
+    .latency-item {
+      text-align: center;
+
+      .latency-label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: rgba(0, 0, 0, 0.45);
+        margin-bottom: 4px;
+      }
+
+      .latency-value {
+        font-size: 20px;
+        font-weight: 600;
+        font-family: monospace;
+      }
+    }
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 8px;
+
+    mat-card {
+      mat-card-content {
+        padding: 16px;
+      }
+    }
+  }
+}
+
+// ── Dark Theme ──
+
+:host-context(.dark-theme) {
+  .reports {
+    .clickable-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .empty-state {
+      color: rgba(255, 255, 255, 0.38);
+    }
+
+    .status-chip {
+      &[data-status="completed"] {
+        background: #1b5e20;
+        color: #a5d6a7;
+      }
+
+      &[data-status="failed"] {
+        background: #b71c1c;
+        color: #ef9a9a;
+      }
+
+      &[data-status="running"] {
+        background: #0d47a1;
+        color: #90caf9;
+      }
+
+      &[data-status="cancelled"] {
+        background: #e65100;
+        color: #ffcc80;
+      }
+    }
+
+    .detail-header .detail-title-block .detail-meta .meta-item {
+      color: rgba(255, 255, 255, 0.54);
+    }
+
+    .metric-card .metric-label {
+      color: rgba(255, 255, 255, 0.54);
+    }
+
+    .category-card .category-header:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .category-card .category-stats .cat-rate {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .test-result-item {
+      &.passed { background: rgba(76, 175, 80, 0.08); }
+      &.failed { background: rgba(244, 67, 54, 0.08); }
+
+      .test-result-header .test-duration {
+        color: rgba(255, 255, 255, 0.45);
+      }
+
+      .failure-reason {
+        background: rgba(244, 67, 54, 0.12);
+        color: #ef9a9a;
+      }
+
+      .test-request-info {
+        .http-badge {
+          background: #0d47a1;
+          color: #90caf9;
+        }
+
+        .request-url {
+          color: rgba(255, 255, 255, 0.54);
+        }
+      }
+    }
+
+    .latency-grid .latency-item .latency-label {
+      color: rgba(255, 255, 255, 0.45);
+    }
+  }
+}

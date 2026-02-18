@@ -1,0 +1,717 @@
+.explorer-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+
+  h2 {
+    margin: 0 0 4px;
+    font-size: 28px;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0 0 24px;
+    color: rgba(0, 0, 0, 0.54);
+    font-size: 14px;
+  }
+}
+
+// ── Server Picker ──
+
+.server-picker-card {
+  margin-bottom: 16px;
+
+  .server-select {
+    width: 100%;
+  }
+
+  .server-hint {
+    margin: 4px 0 0;
+    color: rgba(0, 0, 0, 0.5);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+// ── Operations ──
+
+.operations-card {
+  margin-bottom: 16px;
+
+  .operation-section {
+    padding: 12px 0;
+
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 500;
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+    }
+  }
+
+  .operation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .operation-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    border-radius: 20px;
+    text-transform: none;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &.selected {
+      background: #1976d2;
+      color: white;
+      border-color: #1976d2;
+    }
+  }
+}
+
+// ── Request / Response Split ──
+
+.request-response-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.request-panel,
+.response-panel {
+  min-height: 400px;
+
+  mat-card-header {
+    margin-bottom: 12px;
+  }
+}
+
+// ── Method + Path ──
+
+.method-path-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  .method-field {
+    width: 130px;
+    flex-shrink: 0;
+  }
+
+  .path-field {
+    flex: 1;
+  }
+}
+
+// ── ID Pickers ──
+
+.id-picker-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  .id-field {
+    flex: 1;
+  }
+}
+
+.full-width {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+// ── Custom Fields ──
+
+.custom-fields-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(25, 118, 210, 0.03);
+}
+
+.custom-fields-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    font-size: 14px;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #1976d2;
+    }
+
+    .field-count {
+      font-weight: 400;
+      color: rgba(0, 0, 0, 0.5);
+      font-size: 13px;
+    }
+  }
+}
+
+.custom-field-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.custom-field-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  border-radius: 16px;
+  text-transform: none;
+  padding: 2px 12px;
+  min-height: 32px;
+  transition: all 0.15s;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .required-badge {
+    color: #d32f2f;
+    font-weight: 700;
+    font-size: 14px;
+    margin-left: 2px;
+  }
+
+  &.enabled {
+    background: #1976d2;
+    color: white;
+    border-color: #1976d2;
+
+    .required-badge {
+      color: #ffcdd2;
+    }
+  }
+}
+
+// ── Schema Discovery ──
+
+.schema-discovery-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(76, 175, 80, 0.04);
+}
+
+.schema-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.schema-chip {
+  .attr-type-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.55);
+    margin-left: 4px;
+  }
+
+  &.enabled .attr-type-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+.schema-empty-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.45);
+  font-style: italic;
+}
+
+// ── Body Editor ──
+
+.body-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 500;
+  font-size: 14px;
+
+  .body-actions {
+    display: flex;
+    gap: 4px;
+  }
+}
+
+.body-textarea {
+  width: 100%;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: #fafafa;
+  resize: vertical;
+  box-sizing: border-box;
+  tab-size: 2;
+
+  &:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15);
+  }
+}
+
+// ── Send Row ──
+
+.send-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  padding: 6px 24px;
+}
+
+// ── Response Panel ──
+
+.response-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.response-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.38);
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+  }
+}
+
+// ── Status Bar ──
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-weight: 500;
+
+  &.status-2xx {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  &.status-3xx {
+    background: #fff3e0;
+    color: #ef6c00;
+  }
+
+  &.status-4xx {
+    background: #fbe9e7;
+    color: #d84315;
+  }
+
+  &.status-5xx {
+    background: #ffebee;
+    color: #c62828;
+  }
+
+  .status-code {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .status-text {
+    font-size: 14px;
+  }
+
+  .duration {
+    margin-left: auto;
+    font-size: 13px;
+    opacity: 0.8;
+  }
+}
+
+.request-url {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.54);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+// ── Response Body ──
+
+.response-body {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 500px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 12px 0;
+}
+
+// ── Response Headers ──
+
+.response-headers {
+  padding: 12px 0;
+
+  .header-row {
+    display: flex;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 13px;
+    gap: 12px;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .header-key {
+    font-weight: 600;
+    min-width: 180px;
+    color: #1976d2;
+    word-break: break-word;
+  }
+
+  .header-value {
+    color: rgba(0, 0, 0, 0.7);
+    word-break: break-all;
+  }
+}
+
+// ── History ──
+
+.history-card {
+  margin-bottom: 16px;
+
+  mat-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .history-method {
+    font-weight: 700;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    min-width: 60px;
+  }
+
+  .history-path {
+    flex: 1;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    color: rgba(0, 0, 0, 0.7);
+  }
+
+  .history-status {
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+
+    &.status-2xx {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    &.status-4xx {
+      background: #fbe9e7;
+      color: #d84315;
+    }
+
+    &.status-5xx {
+      background: #ffebee;
+      color: #c62828;
+    }
+  }
+
+  .history-time {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    min-width: 70px;
+    text-align: right;
+  }
+}
+
+// ── Dark Theme ──
+
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0;
+  gap: 8px;
+  color: rgba(0, 0, 0, 0.4);
+
+  mat-icon {
+    font-size: 40px;
+    height: 40px;
+    width: 40px;
+    opacity: 0.3;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+:host-context(.dark-theme) {
+  .explorer-page .subtitle {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .server-hint {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .body-textarea {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-color: rgba(255, 255, 255, 0.12);
+
+    &:focus {
+      border-color: #64b5f6;
+      box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2);
+    }
+  }
+
+  .response-body {
+    background: #1e1e1e;
+    color: #d4d4d4;
+  }
+
+  .request-url {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .response-placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .response-loading {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .status-bar {
+    &.status-2xx {
+      background: rgba(46, 125, 50, 0.15);
+      color: #81c784;
+    }
+
+    &.status-3xx {
+      background: rgba(239, 108, 0, 0.15);
+      color: #ffb74d;
+    }
+
+    &.status-4xx {
+      background: rgba(216, 67, 21, 0.15);
+      color: #ef9a9a;
+    }
+
+    &.status-5xx {
+      background: rgba(198, 40, 40, 0.15);
+      color: #ef9a9a;
+    }
+  }
+
+  .response-headers {
+    .header-row {
+      border-bottom-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .header-key {
+      color: #64b5f6;
+    }
+
+    .header-value {
+      color: rgba(255, 255, 255, 0.7);
+    }
+  }
+
+  .history-entry {
+    border-color: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .history-path {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .history-status {
+      &.status-2xx {
+        background: rgba(46, 125, 50, 0.15);
+        color: #81c784;
+      }
+
+      &.status-4xx {
+        background: rgba(216, 67, 21, 0.15);
+        color: #ef9a9a;
+      }
+
+      &.status-5xx {
+        background: rgba(198, 40, 40, 0.15);
+        color: #ef9a9a;
+      }
+    }
+
+    .history-time {
+      color: rgba(255, 255, 255, 0.35);
+    }
+  }
+
+  .history-empty {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .operation-chip.selected {
+    background: #1565c0;
+    border-color: #1565c0;
+  }
+
+  .custom-fields-section {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(100, 181, 246, 0.06);
+  }
+
+  .custom-fields-header > span {
+    mat-icon {
+      color: #64b5f6;
+    }
+
+    .field-count {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  }
+
+  .custom-field-chip {
+    &.enabled {
+      background: #1565c0;
+      border-color: #1565c0;
+    }
+
+    .required-badge {
+      color: #ef9a9a;
+    }
+  }
+
+  .schema-discovery-section {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(76, 175, 80, 0.08);
+  }
+
+  .schema-chip .attr-type-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .schema-chip.enabled .attr-type-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .schema-empty-hint {
+    color: rgba(255, 255, 255, 0.35);
+  }
+}

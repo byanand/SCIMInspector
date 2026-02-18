@@ -1,0 +1,339 @@
+<div class="reports">
+  <!-- ── List View ── -->
+  @if (!viewingRun()) {
+    <div class="header">
+      <h1>Reports</h1>
+      <div class="header-actions">
+        <mat-form-field appearance="outline" class="filter-field">
+          <mat-label>Filter</mat-label>
+          <mat-select [ngModel]="filterType()" (ngModelChange)="setFilter($event)">
+            <mat-option value="all">All</mat-option>
+            <mat-option value="validation">Validation</mat-option>
+            <mat-option value="loadtest">Load Test</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button mat-raised-button color="primary" (click)="compareSelected()" [disabled]="selectedRuns().size < 2">
+          <mat-icon>compare_arrows</mat-icon> Compare Selected
+        </button>
+      </div>
+    </div>
+
+    <!-- Comparison Chart -->
+    @if (showComparison()) {
+      <mat-card class="comparison-card">
+        <mat-card-header>
+          <mat-card-title>Historical Comparison</mat-card-title>
+          <button mat-icon-button (click)="showComparison.set(false)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-card-header>
+        <mat-card-content>
+          <canvas baseChart
+            [data]="comparisonChartData()"
+            [options]="comparisonChartOptions"
+            type="line">
+          </canvas>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    <!-- Runs Table -->
+    <mat-card>
+      <mat-card-content>
+        @if (filteredRuns().length === 0) {
+          <div class="empty-state">
+            <mat-icon>assessment</mat-icon>
+            <p>No test runs yet. Run a validation or load test to see reports here.</p>
+          </div>
+        } @else {
+          <table mat-table [dataSource]="filteredRuns()" class="runs-table">
+            <ng-container matColumnDef="select">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let run">
+                <mat-checkbox [checked]="isSelected(run.id)" (click)="toggleSelect(run.id, $event)"></mat-checkbox>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="type">
+              <th mat-header-cell *matHeaderCellDef>Type</th>
+              <td mat-cell *matCellDef="let run">
+                <mat-icon>{{ run.run_type === 'validation' ? 'verified' : 'speed' }}</mat-icon>
+                {{ run.run_type === 'validation' ? 'Validation' : 'Load Test' }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="config_name">
+              <th mat-header-cell *matHeaderCellDef>Server</th>
+              <td mat-cell *matCellDef="let run">{{ getServerName(run.server_config_id) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <td mat-cell *matCellDef="let run">
+                <span class="status-chip" [attr.data-status]="run.status">{{ run.status }}</span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="created_at">
+              <th mat-header-cell *matHeaderCellDef>Date</th>
+              <td mat-cell *matCellDef="let run">{{ formatDate(run.started_at) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="summary">
+              <th mat-header-cell *matHeaderCellDef>Summary</th>
+              <td mat-cell *matCellDef="let run" class="summary-cell">{{ getSummaryText(run) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let run">
+                <button mat-icon-button matTooltip="View Report" (click)="viewRun(run); $event.stopPropagation()">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+                <button mat-icon-button [matMenuTriggerFor]="exportMenu" matTooltip="Export" (click)="$event.stopPropagation()">
+                  <mat-icon>download</mat-icon>
+                </button>
+                <mat-menu #exportMenu="matMenu">
+                  <button mat-menu-item (click)="exportReport(run.id, 'pdf')">
+                    <mat-icon>picture_as_pdf</mat-icon> Export PDF
+                  </button>
+                  <button mat-menu-item (click)="exportReport(run.id, 'csv')">
+                    <mat-icon>table_chart</mat-icon> Export CSV
+                  </button>
+                  <button mat-menu-item (click)="exportReport(run.id, 'json')">
+                    <mat-icon>code</mat-icon> Export JSON
+                  </button>
+                </mat-menu>
+                <button mat-icon-button color="warn" (click)="deleteRun(run.id, $event)" matTooltip="Delete">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="clickable-row" (click)="viewRun(row)"></tr>
+          </table>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+
+  <!-- ── Detail View ── -->
+  @if (viewingRun(); as run) {
+    <div class="detail-view">
+      <div class="detail-header">
+        <button mat-icon-button (click)="closeDetail()" matTooltip="Back to list">
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+        <div class="detail-title-block">
+          <h1>
+            <mat-icon>{{ run.run_type === 'validation' ? 'verified' : 'speed' }}</mat-icon>
+            {{ run.run_type === 'validation' ? 'Validation' : 'Load Test' }} Report
+          </h1>
+          <div class="detail-meta">
+            <span class="status-chip" [attr.data-status]="run.status">{{ run.status }}</span>
+            <span class="meta-item"><mat-icon>dns</mat-icon> {{ viewingServerName() }}</span>
+            <span class="meta-item"><mat-icon>schedule</mat-icon> {{ formatDate(run.started_at) }}</span>
+          </div>
+        </div>
+        <div class="detail-header-actions">
+          <button mat-raised-button [matMenuTriggerFor]="detailExportMenu">
+            <mat-icon>download</mat-icon> Export
+          </button>
+          <mat-menu #detailExportMenu="matMenu">
+            <button mat-menu-item (click)="exportReport(run.id, 'pdf')"><mat-icon>picture_as_pdf</mat-icon> PDF</button>
+            <button mat-menu-item (click)="exportReport(run.id, 'csv')"><mat-icon>table_chart</mat-icon> CSV</button>
+            <button mat-menu-item (click)="exportReport(run.id, 'json')"><mat-icon>code</mat-icon> JSON</button>
+          </mat-menu>
+        </div>
+      </div>
+
+      <!-- ── Validation Detail ── -->
+      @if (run.run_type === 'validation') {
+        @if (validationSummary(); as vs) {
+          <div class="results-summary">
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ vs.compliance_score | number:'1.1-1' }}%</div>
+                <div class="metric-label">Compliance Score</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value success">{{ vs.passed }}</div>
+                <div class="metric-label">Passed</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value error">{{ vs.failed }}</div>
+                <div class="metric-label">Failed</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ vs.total }}</div>
+                <div class="metric-label">Total Tests</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ formatDuration(vs.duration_ms) }}</div>
+                <div class="metric-label">Duration</div>
+              </mat-card-content>
+            </mat-card>
+          </div>
+        }
+
+        <!-- Category accordion -->
+        @for (cat of validationCategories(); track cat.name) {
+          <mat-card class="category-card">
+            <mat-card-header (click)="cat.expanded = !cat.expanded" class="category-header clickable-row">
+              <mat-card-title>
+                <mat-icon>{{ cat.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+                {{ cat.name }}
+              </mat-card-title>
+              <div class="category-stats">
+                <span class="cat-pass">{{ getCategoryPassCount(cat.results) }} passed</span>
+                <span class="cat-fail" *ngIf="cat.results.length - getCategoryPassCount(cat.results) > 0">
+                  {{ cat.results.length - getCategoryPassCount(cat.results) }} failed
+                </span>
+                <span class="cat-rate">{{ getPassRate(cat.results) }}%</span>
+              </div>
+            </mat-card-header>
+            @if (cat.expanded) {
+              <mat-card-content>
+                <div class="test-results-list">
+                  @for (result of cat.results; track result.id) {
+                    <div class="test-result-item" [class.passed]="result.passed" [class.failed]="!result.passed">
+                      <div class="test-result-header">
+                        <mat-icon [class.pass-icon]="result.passed" [class.fail-icon]="!result.passed">
+                          {{ result.passed ? 'check_circle' : 'cancel' }}
+                        </mat-icon>
+                        <span class="test-name">{{ result.test_name }}</span>
+                        <span class="test-duration">{{ result.duration_ms }}ms</span>
+                      </div>
+                      @if (!result.passed && result.failure_reason) {
+                        <div class="failure-reason">{{ result.failure_reason }}</div>
+                      }
+                      <div class="test-request-info">
+                        <span class="http-badge">{{ result.http_method }}</span>
+                        <span class="request-url">{{ result.url }}</span>
+                        @if (result.response_status) {
+                          <span class="response-status" [class.status-ok]="result.response_status! >= 200 && result.response_status! < 300"
+                            [class.status-err]="result.response_status! >= 400">
+                            {{ result.response_status }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </mat-card-content>
+            }
+          </mat-card>
+        }
+      }
+
+      <!-- ── Load Test Detail ── -->
+      @if (run.run_type === 'loadtest') {
+        @if (loadTestSummary(); as lts) {
+          <div class="results-summary">
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.total_requests }}</div>
+                <div class="metric-label">Total Requests</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.requests_per_second | number:'1.1-1' }}</div>
+                <div class="metric-label">Requests/sec</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.avg_latency_ms | number:'1.0-0' }}ms</div>
+                <div class="metric-label">Avg Latency</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.p95_latency_ms | number:'1.0-0' }}ms</div>
+                <div class="metric-label">P95 Latency</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.p99_latency_ms | number:'1.0-0' }}ms</div>
+                <div class="metric-label">P99 Latency</div>
+              </mat-card-content>
+            </mat-card>
+            <mat-card class="metric-card" [class.error-rate]="lts.error_rate > 0">
+              <mat-card-content>
+                <div class="metric-value">{{ lts.error_rate | number:'1.1-1' }}%</div>
+                <div class="metric-label">Error Rate</div>
+              </mat-card-content>
+            </mat-card>
+          </div>
+
+          <!-- Latency Breakdown -->
+          <mat-card class="latency-detail-card">
+            <mat-card-header><mat-card-title>Latency Breakdown</mat-card-title></mat-card-header>
+            <mat-card-content>
+              <div class="latency-grid">
+                <div class="latency-item">
+                  <span class="latency-label">Min</span>
+                  <span class="latency-value">{{ lts.min_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+                <div class="latency-item">
+                  <span class="latency-label">Avg</span>
+                  <span class="latency-value">{{ lts.avg_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+                <div class="latency-item">
+                  <span class="latency-label">P50</span>
+                  <span class="latency-value">{{ lts.p50_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+                <div class="latency-item">
+                  <span class="latency-label">P95</span>
+                  <span class="latency-value">{{ lts.p95_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+                <div class="latency-item">
+                  <span class="latency-label">P99</span>
+                  <span class="latency-value">{{ lts.p99_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+                <div class="latency-item">
+                  <span class="latency-label">Max</span>
+                  <span class="latency-value">{{ lts.max_latency_ms | number:'1.0-0' }}ms</span>
+                </div>
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <!-- Charts -->
+          <div class="charts-grid">
+            <mat-card>
+              <mat-card-content>
+                <canvas baseChart
+                  [data]="latencyChartData()"
+                  [options]="latencyChartOptions"
+                  type="bar">
+                </canvas>
+              </mat-card-content>
+            </mat-card>
+
+            <mat-card>
+              <mat-card-content>
+                <canvas baseChart
+                  [data]="statusChartData()"
+                  [options]="statusChartOptions"
+                  type="doughnut">
+                </canvas>
+              </mat-card-content>
+            </mat-card>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

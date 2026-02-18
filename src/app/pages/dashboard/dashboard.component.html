@@ -1,0 +1,85 @@
+<div class="dashboard">
+  <h1>Dashboard</h1>
+
+  <div class="stats-grid">
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <mat-icon class="stat-icon" color="primary">dns</mat-icon>
+        <div class="stat-value">{{ serverCount() }}</div>
+        <div class="stat-label">Server Profiles</div>
+      </mat-card-content>
+      <mat-card-actions>
+        <a mat-button routerLink="/server-config" color="primary">Manage</a>
+      </mat-card-actions>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <mat-icon class="stat-icon" [style.color]="lastValidationScore() !== null && lastValidationScore()! >= 80 ? '#4caf50' : '#ff9800'">verified</mat-icon>
+        <div class="stat-value">
+          @if (lastValidationScore() !== null) {
+            {{ lastValidationScore() }}%
+          } @else {
+            --
+          }
+        </div>
+        <div class="stat-label">Last Compliance Score</div>
+      </mat-card-content>
+      <mat-card-actions>
+        <a mat-button routerLink="/validation" color="primary">Run Tests</a>
+      </mat-card-actions>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <mat-icon class="stat-icon" color="accent">speed</mat-icon>
+        <div class="stat-value">
+          @if (lastLoadTestRps() !== null) {
+            {{ lastLoadTestRps() }}
+          } @else {
+            --
+          }
+        </div>
+        <div class="stat-label">Last RPS</div>
+      </mat-card-content>
+      <mat-card-actions>
+        <a mat-button routerLink="/load-test" color="primary">Load Test</a>
+      </mat-card-actions>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-content>
+        <mat-icon class="stat-icon" color="primary">assessment</mat-icon>
+        <div class="stat-value">{{ recentRuns().length }}</div>
+        <div class="stat-label">Recent Test Runs</div>
+      </mat-card-content>
+      <mat-card-actions>
+        <a mat-button routerLink="/reports" color="primary">View Reports</a>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+
+  <mat-card class="recent-runs-card">
+    <mat-card-header>
+      <mat-card-title>Recent Test Runs</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      @if (recentRuns().length === 0) {
+        <p class="empty-state">No test runs yet. Configure a server and run your first validation!</p>
+      } @else {
+        <div class="runs-list">
+          @for (run of recentRuns(); track run.id) {
+            <div class="run-item">
+              <mat-icon>{{ run.run_type === 'validation' ? 'verified' : 'speed' }}</mat-icon>
+              <div class="run-info">
+                <span class="run-type">{{ run.run_type === 'validation' ? 'Validation' : 'Load Test' }}</span>
+                <span class="run-date">{{ formatDate(run.started_at) }}</span>
+              </div>
+              <mat-chip [color]="getStatusColor(run.status)">{{ run.status }}</mat-chip>
+            </div>
+          }
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>
