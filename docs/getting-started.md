@@ -10,6 +10,14 @@ Go to the [Releases](https://github.com/byanand/SCIMInspector/releases/latest) p
 - **macOS**: `.dmg` (separate builds for Apple Silicon and Intel)
 - **Linux**: `.AppImage` or `.deb`
 
+> **Windows SmartScreen Warning**
+>
+> When you run the installer, Windows may show a "Windows protected your PC" warning because the app is not code-signed with a commercial certificate. This is normal for open-source software.
+>
+> To proceed: click **"More info"** → **"Run anyway"**.
+>
+> The app is fully open-source — you can review all code in this repository or build from source yourself.
+
 ### Build from Source
 
 ```bash
