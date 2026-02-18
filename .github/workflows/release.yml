@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write          # Required by SignPath for OIDC trust
 
 jobs:
   build:
@@ -74,6 +75,53 @@ jobs:
             | macOS (Apple Silicon) | `.dmg` |
             | macOS (Intel) | `.dmg` |
             | Linux (64-bit) | `.AppImage` or `.deb` |
+
+            > **Windows:** If SmartScreen warns you, click "More info" → "Run anyway".
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
+
+  # ── Code-sign Windows artifacts with SignPath.io ──────────────────────
+  # This job runs only after the Windows build completes.
+  # It requires a SignPath.io OSS account and the following GitHub secrets:
+  #   SIGNPATH_API_TOKEN          – API token from SignPath dashboard
+  # And these values from your SignPath project (set in env below):
+  #   SIGNPATH_ORGANIZATION_ID    – your org ID
+  #   SIGNPATH_PROJECT_SLUG       – project slug (e.g. "SCIMInspector")
+  #   SIGNPATH_SIGNING_POLICY_SLUG – policy slug (e.g. "release-signing")
+  #
+  # To enable: uncomment the block below and fill in the env values.
+
+  # sign-windows:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  #   steps:
+  #     - name: Download Windows release assets
+  #       uses: robinrber/githubasset-dl@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         tag: ${{ github.ref_name }}
+  #         out: ./artifacts
+  #         pattern: "*.exe,*.msi"
+  #
+  #     - name: Submit signing request to SignPath
+  #       uses: signpath/github-action-submit-signing-request@v1
+  #       with:
+  #         api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+  #         organization-id: "<YOUR_SIGNPATH_ORG_ID>"
+  #         project-slug: "SCIMInspector"
+  #         signing-policy-slug: "release-signing"
+  #         artifact-configuration-slug: "windows-installer"
+  #         github-artifact-id: "unsigned-windows"
+  #         wait-for-completion: true
+  #         output-artifact-directory: ./signed
+  #
+  #     - name: Upload signed artifacts to release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         tag_name: ${{ github.ref_name }}
+  #         files: ./signed/*
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
