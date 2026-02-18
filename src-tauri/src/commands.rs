@@ -180,11 +180,7 @@ pub async fn start_load_test(
     state.db.save_test_run(&test_run).map_err(|e| e.to_string())?;
 
     let start = Instant::now();
-    let results = if config.scenario.is_some() {
-        LoadTestEngine::run_scenario(&app, client, &test_run_id, &config, cancel_flag.clone()).await
-    } else {
-        LoadTestEngine::run_scenario(&app, client, &test_run_id, &config, cancel_flag.clone()).await
-    };
+    let results = LoadTestEngine::run_scenario(&app, client, &test_run_id, &config, cancel_flag.clone()).await;
     let total_duration_ms = start.elapsed().as_millis() as i64;
 
     // Save results in batches

@@ -44,22 +44,22 @@ impl ExportEngine {
         let mut wtr = csv::Writer::from_path(output_path)
             .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
 
-        wtr.write_record(&[
+        wtr.write_record([
             "Test Name", "Category", "HTTP Method", "URL", "Response Status",
             "Duration (ms)", "Passed", "Failure Reason", "Executed At"
         ]).map_err(|e| format!("CSV write error: {}", e))?;
 
         for r in results {
-            wtr.write_record(&[
-                &r.test_name,
-                &r.category,
-                &r.http_method,
-                &r.url,
+            wtr.write_record([
+                r.test_name.as_str(),
+                r.category.as_str(),
+                r.http_method.as_str(),
+                r.url.as_str(),
                 &r.response_status.map_or(String::new(), |s| s.to_string()),
                 &r.duration_ms.to_string(),
                 &r.passed.to_string(),
                 r.failure_reason.as_deref().unwrap_or(""),
-                &r.executed_at,
+                r.executed_at.as_str(),
             ]).map_err(|e| format!("CSV write error: {}", e))?;
         }
 
@@ -74,21 +74,21 @@ impl ExportEngine {
         let mut wtr = csv::Writer::from_path(output_path)
             .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
 
-        wtr.write_record(&[
+        wtr.write_record([
             "Request Index", "HTTP Method", "URL", "Status Code",
             "Duration (ms)", "Success", "Error Message", "Timestamp"
         ]).map_err(|e| format!("CSV write error: {}", e))?;
 
         for r in results {
-            wtr.write_record(&[
+            wtr.write_record([
                 &r.request_index.to_string(),
-                &r.http_method,
-                &r.url,
+                r.http_method.as_str(),
+                r.url.as_str(),
                 &r.status_code.map_or(String::new(), |s| s.to_string()),
                 &r.duration_ms.to_string(),
                 &r.success.to_string(),
                 r.error_message.as_deref().unwrap_or(""),
-                &r.timestamp,
+                r.timestamp.as_str(),
             ]).map_err(|e| format!("CSV write error: {}", e))?;
         }
 

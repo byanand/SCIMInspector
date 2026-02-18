@@ -93,7 +93,7 @@ impl LoadTestEngine {
 
         // Cleanup: delete all created users
         let ids = created_ids.lock().await.clone();
-        Self::cleanup_users(&app, &client, test_run_id, &ids, &cancel_flag, &mut results, total, &start_time).await;
+        Self::cleanup_users(app, &client, test_run_id, &ids, &cancel_flag, &mut results, total, &start_time).await;
 
         results
     }
@@ -189,7 +189,7 @@ impl LoadTestEngine {
         results.extend(Self::collect_results(update_handles).await);
 
         // Cleanup
-        Self::cleanup_users(&app, &client, test_run_id, &ids, &cancel_flag, &mut results, total_http, &start_time).await;
+        Self::cleanup_users(app, &client, test_run_id, &ids, &cancel_flag, &mut results, total_http, &start_time).await;
 
         results
     }
@@ -361,6 +361,7 @@ impl LoadTestEngine {
 
     // ── Cleanup ──
 
+    #[allow(clippy::too_many_arguments)]
     async fn cleanup_users(
         app: &AppHandle,
         client: &ScimClient,
@@ -539,7 +540,7 @@ impl LoadTestEngine {
         start_time: &Instant,
         error_count: &AtomicUsize,
     ) {
-        if completed % 10 == 0 || completed == total {
+        if completed.is_multiple_of(10) || completed == total {
             let elapsed_secs = start_time.elapsed().as_secs_f64();
             let _ = app.emit("loadtest-progress", LoadTestProgress {
                 test_run_id: run_id.to_string(),

@@ -182,7 +182,7 @@ impl ValidationEngine {
         match attr_type {
             "string"              => Value::String("scim_test_value".to_string()),
             "integer"             => serde_json::json!(42),
-            "decimal"             => serde_json::json!(3.14),
+            "decimal"             => serde_json::json!(std::f64::consts::PI),
             "boolean"             => Value::Bool(true),
             "dateTime" | "datetime" => Value::String(Utc::now().to_rfc3339()),
             "reference"           => Value::String("https://example.com/test".to_string()),
@@ -201,6 +201,7 @@ impl ValidationEngine {
         booleans * 2 + others
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_result(
         test_run_id: &str,
         test_name: &str,
@@ -1177,7 +1178,7 @@ impl ValidationEngine {
             Value::Number(n) => n.to_string(),
             _ => value.to_string(),
         };
-        let short_schema = attr.schema_urn.split(':').last().unwrap_or(&attr.schema_urn);
+        let short_schema = attr.schema_urn.rsplit(':').next().unwrap_or(&attr.schema_urn);
         let test_name = format!(
             "POST /Users - Create with {}.{} = {}",
             short_schema, attr.attr_name, value_display
@@ -1286,8 +1287,8 @@ impl ValidationEngine {
     pub fn compute_summary(results: &[ValidationResult]) -> ValidationSummary {
         let total = results.len();
         let passed = results.iter().filter(|r| r.passed).count();
-        let failed = results.iter().filter(|r| !r.passed && !r.failure_reason.as_ref().map_or(false, |r| r.starts_with("Skipped"))).count();
-        let skipped = results.iter().filter(|r| r.failure_reason.as_ref().map_or(false, |r| r.starts_with("Skipped"))).count();
+        let failed = results.iter().filter(|r| !r.passed && !r.failure_reason.as_ref().is_some_and(|r| r.starts_with("Skipped"))).count();
+        let skipped = results.iter().filter(|r| r.failure_reason.as_ref().is_some_and(|r| r.starts_with("Skipped"))).count();
         let compliance_score = if total - skipped > 0 {
             (passed as f64 / (total - skipped) as f64) * 100.0
         } else {
@@ -1501,7 +1502,7 @@ impl ValidationEngine {
         }
     }
 
-    fn resolve_path<'a>(json: &'a Value, path: &str) -> Option<Value> {
+    fn resolve_path(json: &Value, path: &str) -> Option<Value> {
         let mut current = json.clone();
         for part in Self::split_path(path) {
             match part {
