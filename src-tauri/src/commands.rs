@@ -24,12 +24,19 @@ pub struct AppState {
 #[tauri::command]
 pub async fn save_server_config(state: State<'_, AppState>, config: ServerConfig) -> Result<ServerConfig, String> {
     let mut config = config;
-    if config.id.is_empty() {
+    let is_new = config.id.is_empty();
+    if is_new {
         config.id = Uuid::new_v4().to_string();
         config.created_at = Utc::now().to_rfc3339();
     }
     config.updated_at = Utc::now().to_rfc3339();
     state.db.save_server_config(&config).map_err(|e| e.to_string())?;
+
+    // Seed default sample data for new servers
+    if is_new {
+        let _ = state.db.seed_default_sample_data(&config.id);
+    }
+
     Ok(config)
 }
 
@@ -112,7 +119,10 @@ pub async fn run_validation(
     let field_mapping_rules = state.db.get_field_mapping_rules(&config.server_config_id)
         .map_err(|e| e.to_string())?;
 
-    let results = ValidationEngine::run(&app, &client, &test_run_id, &config.categories, &field_mapping_rules).await;
+    let user_jp = config.user_joining_property.as_deref().unwrap_or("userName");
+    let group_jp = config.group_joining_property.as_deref().unwrap_or("displayName");
+
+    let results = ValidationEngine::run(&app, &client, &test_run_id, &config.categories, &field_mapping_rules, user_jp, group_jp).await;
 
     // Save results
     for r in &results {
@@ -329,6 +339,41 @@ pub async fn discover_custom_schema(
     Ok(ValidationEngine::discover_custom_attributes(&client).await)
 }
 
+// ── Raw SCIM Schema Fetch (for IntelliSense) ──
+
+#[tauri::command]
+pub async fn get_scim_schemas(
+    state: State<'_, AppState>,
+    server_config_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    let config = state.db.get_server_config(&server_config_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Server config not found")?;
+    let client = ScimClient::new(&config)?;
+
+    let resp = client.get("/Schemas").await
+        .map_err(|e| format!("Failed to fetch /Schemas: {}", e))?;
+
+    if resp.status != 200 {
+        return Err(format!("/Schemas returned status {}", resp.status));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&resp.body)
+        .map_err(|e| format!("Failed to parse /Schemas response: {}", e))?;
+
+    // Handle both ListResponse wrapper and direct array
+    let schemas: Vec<serde_json::Value> = if let Some(resources) = json.get("Resources").or_else(|| json.get("resources")) {
+        resources.as_array().cloned().unwrap_or_default()
+    } else if let Some(arr) = json.as_array() {
+        arr.clone()
+    } else {
+        // Single schema object
+        vec![json]
+    };
+
+    Ok(schemas)
+}
+
 // ── Field Mapping Commands ──
 
 #[tauri::command]
@@ -351,6 +396,35 @@ pub async fn get_field_mapping_rules(state: State<'_, AppState>, server_config_i
 #[tauri::command]
 pub async fn delete_field_mapping_rule(state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.db.delete_field_mapping_rule(&id).map_err(|e| e.to_string())
+}
+
+// ── Sample Data Commands ──
+
+#[tauri::command]
+pub async fn get_sample_data(state: State<'_, AppState>, server_config_id: String) -> Result<Vec<SampleData>, String> {
+    state.db.get_sample_data(&server_config_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_sample_data(state: State<'_, AppState>, item: SampleData) -> Result<SampleData, String> {
+    let mut item = item;
+    if item.id.is_empty() {
+        item.id = Uuid::new_v4().to_string();
+        item.created_at = Utc::now().to_rfc3339();
+    }
+    item.updated_at = Utc::now().to_rfc3339();
+    state.db.save_sample_data(&item).map_err(|e| e.to_string())?;
+    Ok(item)
+}
+
+#[tauri::command]
+pub async fn delete_sample_data(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.db.delete_sample_data(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn seed_sample_data(state: State<'_, AppState>, server_config_id: String) -> Result<(), String> {
+    state.db.seed_default_sample_data(&server_config_id).map_err(|e| e.to_string())
 }
 
 // ── App Settings Commands ──

@@ -23,6 +23,11 @@ export const routes: Routes = [
       import('./pages/field-mapping/field-mapping.component').then(m => m.FieldMappingComponent),
   },
   {
+    path: 'sample-data',
+    loadComponent: () =>
+      import('./pages/sample-data/sample-data.component').then(m => m.SampleDataComponent),
+  },
+  {
     path: 'validation',
     loadComponent: () =>
       import('./pages/validation/validation.component').then(m => m.ValidationComponent),

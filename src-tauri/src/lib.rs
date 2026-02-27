@@ -43,6 +43,7 @@ pub fn run() {
             commands::export_report,
             commands::clear_all_data,
             commands::discover_custom_schema,
+            commands::get_scim_schemas,
             commands::save_field_mapping_rule,
             commands::get_field_mapping_rules,
             commands::delete_field_mapping_rule,
@@ -51,6 +52,10 @@ pub fn run() {
             commands::delete_app_setting,
             commands::execute_scim_request,
             commands::generate_scim_data,
+            commands::get_sample_data,
+            commands::save_sample_data,
+            commands::delete_sample_data,
+            commands::seed_sample_data,
         ])
         .run(tauri::generate_context!())
         .expect("Error while running SCIM Inspector");

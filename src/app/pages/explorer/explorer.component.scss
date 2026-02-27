@@ -1,7 +1,10 @@
 .explorer-page {
-  max-width: 1440px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 100px);
 
   h2 {
     margin: 0 0 4px;
@@ -10,52 +13,83 @@
   }
 
   .subtitle {
-    margin: 0 0 24px;
+    margin: 0 0 16px;
     color: rgba(0, 0, 0, 0.54);
     font-size: 14px;
   }
+
+  // When an operation is selected, fill the full viewport
+  &.op-active {
+    height: calc(100vh - 64px);
+    padding: 12px 24px;
+    overflow: hidden;
+  }
 }
 
-// ── Server Picker ──
+// ── Selected Operation Bar ──
 
-.server-picker-card {
-  margin-bottom: 16px;
+.selected-op-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 12px;
+  flex-shrink: 0;
 
-  .server-select {
-    width: 100%;
+  .op-method-badge {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    &.method-get { background: #e8f5e9; color: #2e7d32; }
+    &.method-post { background: #e3f2fd; color: #1565c0; }
+    &.method-put { background: #fff3e0; color: #ef6c00; }
+    &.method-patch { background: #f3e5f5; color: #7b1fa2; }
+    &.method-delete { background: #ffebee; color: #c62828; }
   }
 
-  .server-hint {
-    margin: 4px 0 0;
-    color: rgba(0, 0, 0, 0.5);
-    font-size: 14px;
+  .op-name {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .op-path {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+    color: rgba(0, 0, 0, 0.45);
+  }
+}
+
+// ── Operations Accordion ──
+
+.operations-accordion {
+  margin-bottom: 16px;
+
+  ::ng-deep .mat-expansion-panel {
+    box-shadow: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px !important;
+    margin-bottom: 4px;
+
+    &:not(.mat-expanded) .mat-expansion-panel-header {
+      height: 44px;
+    }
+  }
+
+  ::ng-deep .mat-expansion-panel-header-title {
     display: flex;
     align-items: center;
-    gap: 6px;
-  }
-}
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
 
-// ── Operations ──
-
-.operations-card {
-  margin-bottom: 16px;
-
-  .operation-section {
-    padding: 12px 0;
-
-    h3 {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 0 12px;
-      font-size: 16px;
-      font-weight: 500;
-
-      mat-icon {
-        font-size: 20px;
-        width: 20px;
-        height: 20px;
-      }
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
     }
   }
 
@@ -63,6 +97,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    padding: 4px 0 8px;
   }
 
   .operation-chip {
@@ -85,6 +120,90 @@
       border-color: #1976d2;
     }
   }
+
+  .selected-op-badge {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: #1976d2;
+    background: rgba(25, 118, 210, 0.08);
+    padding: 2px 10px;
+    border-radius: 12px;
+  }
+}
+
+// ── User Picker (Group ops) ──
+
+.user-picker-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid rgba(25, 118, 210, 0.15);
+  border-radius: 8px;
+  background: rgba(25, 118, 210, 0.03);
+
+  .picker-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-weight: 500;
+    font-size: 14px;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #1976d2;
+    }
+  }
+
+  .picker-field {
+    width: 100%;
+  }
+
+  .selected-user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: #e3f2fd;
+    border-radius: 16px;
+    font-size: 13px;
+
+    .user-id {
+      color: rgba(0, 0, 0, 0.45);
+      font-size: 11px;
+    }
+  }
+
+  .selected-users-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .picker-count {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(0, 0, 0, 0.5);
+    background: rgba(25, 118, 210, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .clear-all-btn {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #d32f2f;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
 }
 
 // ── Request / Response Split ──
@@ -93,19 +212,33 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin-bottom: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 
   @media (max-width: 960px) {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 }
 
 .request-panel,
 .response-panel {
-  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
 
   mat-card-header {
     margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+
+  mat-card-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -141,6 +274,76 @@
 .full-width {
   width: 100%;
   margin-bottom: 8px;
+}
+
+// ── Batch Results ──
+
+.batch-results {
+  margin-top: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+
+  .batch-results-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.03);
+    font-weight: 500;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: #1976d2;
+    }
+  }
+
+  .batch-results-table {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .batch-result-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &.success {
+      background: rgba(76, 175, 80, 0.04);
+    }
+
+    &.error {
+      background: rgba(244, 67, 54, 0.04);
+    }
+
+    .batch-result-name {
+      font-weight: 500;
+    }
+
+    .batch-result-id {
+      color: rgba(0, 0, 0, 0.4);
+      font-size: 11px;
+    }
+
+    .batch-result-status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+    }
+  }
 }
 
 // ── Custom Fields ──
@@ -222,50 +425,6 @@
   }
 }
 
-// ── Schema Discovery ──
-
-.schema-discovery-section {
-  margin-bottom: 16px;
-  padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
-  background: rgba(76, 175, 80, 0.04);
-}
-
-.schema-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.schema-chip {
-  .attr-type-badge {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.08);
-    color: rgba(0, 0, 0, 0.55);
-    margin-left: 4px;
-  }
-
-  &.enabled .attr-type-badge {
-    background: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
-  }
-}
-
-.schema-empty-hint {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
-  font-style: italic;
-}
-
 // ── Body Editor ──
 
 .body-editor-header {
@@ -299,6 +458,25 @@
     outline: none;
     border-color: #1976d2;
     box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15);
+  }
+}
+
+.monaco-wrapper {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+
+  ngx-monaco-editor {
+    display: block;
+    height: 100% !important;
+    width: 100%;
+  }
+
+  ::ng-deep .editor-container {
+    height: 100% !important;
+    width: 100%;
   }
 }
 
@@ -416,7 +594,8 @@
   background: #fafafa;
   border-radius: 8px;
   overflow: auto;
-  max-height: 500px;
+  flex: 1;
+  min-height: 0;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 12px 0;
@@ -559,19 +738,26 @@
     color: rgba(255, 255, 255, 0.5);
   }
 
+  .selected-op-bar {
+    .op-path {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .op-method-badge {
+      &.method-get { background: rgba(46, 125, 50, 0.2); color: #81c784; }
+      &.method-post { background: rgba(21, 101, 192, 0.2); color: #64b5f6; }
+      &.method-put { background: rgba(239, 108, 0, 0.2); color: #ffb74d; }
+      &.method-patch { background: rgba(123, 31, 162, 0.2); color: #ce93d8; }
+      &.method-delete { background: rgba(198, 40, 40, 0.2); color: #ef9a9a; }
+    }
+  }
+
   .server-hint {
     color: rgba(255, 255, 255, 0.4);
   }
 
-  .body-textarea {
-    background: #1e1e1e;
-    color: #d4d4d4;
+  .monaco-wrapper {
     border-color: rgba(255, 255, 255, 0.12);
-
-    &:focus {
-      border-color: #64b5f6;
-      box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2);
-    }
   }
 
   .response-body {
@@ -670,6 +856,78 @@
     border-color: #1565c0;
   }
 
+  .operations-accordion {
+    ::ng-deep .mat-expansion-panel {
+      border-color: rgba(255, 255, 255, 0.08);
+      background: transparent;
+    }
+
+    .selected-op-badge {
+      color: #64b5f6;
+      background: rgba(100, 181, 246, 0.12);
+    }
+  }
+
+  .user-picker-section {
+    border-color: rgba(100, 181, 246, 0.15);
+    background: rgba(100, 181, 246, 0.06);
+
+    .picker-header mat-icon {
+      color: #64b5f6;
+    }
+
+    .selected-user-chip {
+      background: rgba(100, 181, 246, 0.12);
+      color: rgba(255, 255, 255, 0.85);
+
+      .user-id {
+        color: rgba(255, 255, 255, 0.4);
+      }
+    }
+
+    .picker-count {
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(100, 181, 246, 0.15);
+    }
+
+    .clear-all-btn {
+      color: #ef9a9a;
+    }
+  }
+
+  .batch-results {
+    border-color: rgba(255, 255, 255, 0.08);
+
+    .batch-results-header {
+      background: rgba(255, 255, 255, 0.04);
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+
+      mat-icon {
+        color: #64b5f6;
+      }
+    }
+
+    .batch-result-row {
+      border-bottom-color: rgba(255, 255, 255, 0.04);
+
+      &.success {
+        background: rgba(76, 175, 80, 0.08);
+      }
+
+      &.error {
+        background: rgba(244, 67, 54, 0.08);
+      }
+
+      .batch-result-name {
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .batch-result-id {
+        color: rgba(255, 255, 255, 0.35);
+      }
+    }
+  }
+
   .custom-fields-section {
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(100, 181, 246, 0.06);
@@ -696,22 +954,4 @@
     }
   }
 
-  .schema-discovery-section {
-    border-color: rgba(255, 255, 255, 0.08);
-    background: rgba(76, 175, 80, 0.08);
-  }
-
-  .schema-chip .attr-type-badge {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .schema-chip.enabled .attr-type-badge {
-    background: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .schema-empty-hint {
-    color: rgba(255, 255, 255, 0.35);
-  }
 }

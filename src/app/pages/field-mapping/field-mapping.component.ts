@@ -15,7 +15,7 @@ import { MatTableModule } from '@angular/material/table';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { FieldMappingRule, FieldFormat, ServerConfig, DiscoveredSchemaAttribute } from '../../models/interfaces';
+import { FieldMappingRule, FieldFormat, DiscoveredSchemaAttribute } from '../../models/interfaces';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 interface ScimAttributePreset {
@@ -101,13 +101,6 @@ export class FieldMappingComponent implements OnInit {
     if (selectedId) {
       await this.loadRules(selectedId);
     }
-  }
-
-  async onServerChange(configId: string) {
-    this.serverConfigService.selectConfig(configId);
-    this.discoveredAttributes.set([]);
-    this.schemaLoaded.set(false);
-    await this.loadRules(configId);
   }
 
   async loadRules(serverConfigId: string) {

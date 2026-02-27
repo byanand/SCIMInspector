@@ -1,0 +1,190 @@
+<div class="sample-data-container">
+  <div class="page-header">
+    <div class="header-actions">
+      @if (!editingItem() && !isNew()) {
+        <button mat-stroked-button (click)="seedDefaults()" matTooltip="Add default sample data entries">
+          <mat-icon>auto_fix_high</mat-icon> Seed Defaults
+        </button>
+        <button mat-flat-button color="primary" [matMenuTriggerFor]="addMenu">
+          <mat-icon>add</mat-icon> New
+        </button>
+        <mat-menu #addMenu="matMenu">
+          <button mat-menu-item (click)="startNew('user')">
+            <mat-icon>person_add</mat-icon> User Template
+          </button>
+          <button mat-menu-item (click)="startNew('group')">
+            <mat-icon>group_add</mat-icon> Group Template
+          </button>
+        </mat-menu>
+      }
+    </div>
+  </div>
+
+  @if (!serverConfigService.selectedConfig()) {
+    <mat-card class="info-card">
+      <mat-card-content>
+        <mat-icon>info</mat-icon>
+        <span>Select a server from the toolbar to manage its sample data.</span>
+      </mat-card-content>
+    </mat-card>
+  } @else {
+
+    <!-- Editor Panel -->
+    @if (editingItem() || isNew()) {
+      <div class="editor-panel">
+        <div class="editor-panel-header">
+          <h3>{{ isNew() ? 'New' : 'Edit' }} {{ editorType() === 'user' ? 'User' : 'Group' }} Template</h3>
+          <div class="editor-panel-actions">
+            <button mat-button (click)="cancelEdit()">Cancel</button>
+            <button mat-flat-button color="primary" (click)="saveItem()" [disabled]="saving() || !!jsonError()">
+              {{ saving() ? 'Saving...' : (isNew() ? 'Create' : 'Update') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-meta-row">
+          <mat-form-field appearance="outline" class="name-field">
+            <mat-label>Name</mat-label>
+            <input matInput [value]="editorName()" (input)="editorName.set($any($event.target).value)" placeholder="e.g. Standard User" />
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="type-field">
+            <mat-label>Type</mat-label>
+            <mat-select [value]="editorType()" (selectionChange)="editorType.set($event.value)" [disabled]="!isNew()">
+              <mat-option value="user">User</mat-option>
+              <mat-option value="group">Group</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button mat-icon-button matTooltip="Format JSON" (click)="formatJson()">
+            <mat-icon>code</mat-icon>
+          </button>
+        </div>
+
+        @if (jsonError()) {
+          <div class="json-error">{{ jsonError() }}</div>
+        }
+
+        <div class="monaco-wrapper">
+          <ngx-monaco-editor
+            [options]="editorOptions()"
+            [ngModel]="editorJson()"
+            (ngModelChange)="editorJson.set($event)"
+            (onInit)="onMonacoInit($event)"
+          ></ngx-monaco-editor>
+        </div>
+        @if (scimSchemaService.schemaStatus() === 'loaded') {
+          <div class="schema-status-hint">
+            <mat-icon class="schema-hint-icon">auto_awesome</mat-icon>
+            <span>IntelliSense enabled — press <kbd>Ctrl</kbd>+<kbd>Space</kbd> for suggestions</span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Data List -->
+    @if (!editingItem() && !isNew()) {
+      @if (loading()) {
+        <div class="loading-state">
+          <mat-spinner diameter="40"></mat-spinner>
+          <span>Loading sample data...</span>
+        </div>
+      } @else {
+        <mat-tab-group>
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>person</mat-icon>&nbsp;Users ({{ userItems().length }})
+            </ng-template>
+            @if (userItems().length === 0) {
+              <div class="empty-state">
+                <mat-icon>person_off</mat-icon>
+                <p>No user templates yet.</p>
+                <button mat-stroked-button (click)="startNew('user')">
+                  <mat-icon>add</mat-icon> Create User Template
+                </button>
+              </div>
+            } @else {
+              <div class="data-grid">
+                @for (item of userItems(); track item.id) {
+                  <mat-card class="data-card">
+                    <mat-card-header>
+                      <mat-icon mat-card-avatar class="type-icon user-icon">person</mat-icon>
+                      <mat-card-title>{{ item.name }}</mat-card-title>
+                      <mat-card-subtitle>
+                        @if (item.is_default) { <mat-icon class="default-badge">verified</mat-icon> Default }
+                        User Template
+                      </mat-card-subtitle>
+                    </mat-card-header>
+                    <mat-card-content>
+                      <pre class="json-preview">{{ item.data_json | slice:0:200 }}{{ item.data_json.length > 200 ? '...' : '' }}</pre>
+                    </mat-card-content>
+                    <mat-card-actions align="end">
+                      <button mat-icon-button matTooltip="Copy JSON" (click)="copyToClipboard(item.data_json)">
+                        <mat-icon>content_copy</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Duplicate" (click)="duplicateItem(item)">
+                        <mat-icon>file_copy</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Edit" (click)="editItem(item)">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteItem(item)">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </mat-card-actions>
+                  </mat-card>
+                }
+              </div>
+            }
+          </mat-tab>
+          <mat-tab>
+            <ng-template mat-tab-label>
+              <mat-icon>groups</mat-icon>&nbsp;Groups ({{ groupItems().length }})
+            </ng-template>
+            @if (groupItems().length === 0) {
+              <div class="empty-state">
+                <mat-icon>group_off</mat-icon>
+                <p>No group templates yet.</p>
+                <button mat-stroked-button (click)="startNew('group')">
+                  <mat-icon>add</mat-icon> Create Group Template
+                </button>
+              </div>
+            } @else {
+              <div class="data-grid">
+                @for (item of groupItems(); track item.id) {
+                  <mat-card class="data-card">
+                    <mat-card-header>
+                      <mat-icon mat-card-avatar class="type-icon group-icon">groups</mat-icon>
+                      <mat-card-title>{{ item.name }}</mat-card-title>
+                      <mat-card-subtitle>
+                        @if (item.is_default) { <mat-icon class="default-badge">verified</mat-icon> Default }
+                        Group Template
+                      </mat-card-subtitle>
+                    </mat-card-header>
+                    <mat-card-content>
+                      <pre class="json-preview">{{ item.data_json | slice:0:200 }}{{ item.data_json.length > 200 ? '...' : '' }}</pre>
+                    </mat-card-content>
+                    <mat-card-actions align="end">
+                      <button mat-icon-button matTooltip="Copy JSON" (click)="copyToClipboard(item.data_json)">
+                        <mat-icon>content_copy</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Duplicate" (click)="duplicateItem(item)">
+                        <mat-icon>file_copy</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Edit" (click)="editItem(item)">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button mat-icon-button matTooltip="Delete" color="warn" (click)="deleteItem(item)">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </mat-card-actions>
+                  </mat-card>
+                }
+              </div>
+            }
+          </mat-tab>
+        </mat-tab-group>
+      }
+    }
+  }
+</div>

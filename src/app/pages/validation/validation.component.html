@@ -1,100 +1,13 @@
 <div class="validation">
   <div class="header">
-    <h1>SCIM Validation</h1>
     <button mat-raised-button color="primary" (click)="runValidation()" [disabled]="running() || !serverConfigService.selectedConfig()">
       @if (running()) {
-        <mat-icon>hourglass_empty</mat-icon> Running...
+        <ng-container><mat-icon>hourglass_empty</mat-icon> Running...</ng-container>
       } @else {
-        <mat-icon>play_arrow</mat-icon> Run Validation
+        <ng-container><mat-icon>play_arrow</mat-icon> Run Validation</ng-container>
       }
     </button>
   </div>
-
-  <!-- Server Selector -->
-  <mat-card class="server-selector-card">
-    <mat-card-header>
-      <mat-card-title>Target Server</mat-card-title>
-      <button mat-button color="primary" (click)="toggleQuickConnect()">
-        <mat-icon>{{ showQuickConnect() ? 'close' : 'add' }}</mat-icon>
-        {{ showQuickConnect() ? 'Cancel' : 'Quick Add' }}
-      </button>
-    </mat-card-header>
-    <mat-card-content>
-      @if (serverConfigService.serverConfigs().length > 0) {
-        <div class="server-select-row">
-          <mat-form-field appearance="outline" class="server-select-field">
-            <mat-label>Select Server Profile</mat-label>
-            <mat-select [ngModel]="serverConfigService.getSelectedId()" (ngModelChange)="onServerChange($event)">
-              @for (config of serverConfigService.serverConfigs(); track config.id) {
-                <mat-option [value]="config.id">
-                  {{ config.name }} — {{ config.base_url }}
-                </mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          @if (serverConfigService.selectedConfig(); as selected) {
-            <div class="selected-server-info">
-              <span class="server-badge">{{ selected.auth_type | uppercase }}</span>
-              <span class="server-url">{{ selected.base_url }}</span>
-            </div>
-          }
-        </div>
-      } @else if (!showQuickConnect()) {
-        <div class="no-servers-prompt">
-          <mat-icon>dns</mat-icon>
-          <p>No server profiles configured. Add one to get started.</p>
-          <button mat-stroked-button color="primary" (click)="toggleQuickConnect()">
-            <mat-icon>add</mat-icon> Add Server
-          </button>
-        </div>
-      }
-
-      @if (showQuickConnect()) {
-        <div class="quick-connect-form">
-          <mat-divider></mat-divider>
-          <h3>Quick Connect</h3>
-          <div class="quick-connect-grid">
-            <mat-form-field appearance="outline">
-              <mat-label>Profile Name</mat-label>
-              <input matInput [ngModel]="quickConnect().name"
-                (ngModelChange)="quickConnect.set({...quickConnect(), name: $event})"
-                placeholder="My SCIM Server">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Base URL</mat-label>
-              <input matInput [ngModel]="quickConnect().base_url"
-                (ngModelChange)="quickConnect.set({...quickConnect(), base_url: $event})"
-                placeholder="https://example.com/scim/v2">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Auth Type</mat-label>
-              <mat-select [ngModel]="quickConnect().auth_type"
-                (ngModelChange)="quickConnect.set({...quickConnect(), auth_type: $event})">
-                <mat-option value="bearer">Bearer Token</mat-option>
-                <mat-option value="basic">Basic Auth</mat-option>
-                <mat-option value="apikey">API Key</mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Token / Credentials</mat-label>
-              <input matInput [ngModel]="quickConnect().auth_token"
-                (ngModelChange)="quickConnect.set({...quickConnect(), auth_token: $event})"
-                placeholder="Bearer token or API key">
-            </mat-form-field>
-          </div>
-          <div class="quick-connect-actions">
-            <button mat-raised-button color="primary" (click)="saveQuickConnect()">
-              <mat-icon>save</mat-icon> Save & Select
-            </button>
-            <button mat-button (click)="toggleQuickConnect()">Cancel</button>
-          </div>
-        </div>
-      }
-    </mat-card-content>
-  </mat-card>
 
   <!-- Category Selection -->
   <mat-card class="categories-card">
@@ -106,6 +19,34 @@
       </div>
     </mat-card-header>
     <mat-card-content>
+      <!-- Joining Property Configuration -->
+      <div class="joining-property-section">
+        <div class="joining-property-header">
+          <mat-icon>link</mat-icon>
+          <span class="joining-property-label">Joining Properties</span>
+          <span class="joining-property-hint">The unique attribute used to match resources (like Microsoft Entra ID matching attribute)</span>
+        </div>
+        <div class="joining-property-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>User Joining Property</mat-label>
+            <mat-select [ngModel]="userJoiningProperty()" (ngModelChange)="userJoiningProperty.set($event)">
+              <mat-option value="userName">userName</mat-option>
+              <mat-option value="externalId">externalId</mat-option>
+              <mat-option value="emails[0].value">emails[0].value</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Group Joining Property</mat-label>
+            <mat-select [ngModel]="groupJoiningProperty()" (ngModelChange)="groupJoiningProperty.set($event)">
+              <mat-option value="displayName">displayName</mat-option>
+              <mat-option value="externalId">externalId</mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </div>
+
+      <mat-divider></mat-divider>
+
       <div class="category-grid">
         @for (cat of categories(); track cat.key; let i = $index) {
           <mat-checkbox [checked]="cat.enabled" (change)="toggleCategory(i)">

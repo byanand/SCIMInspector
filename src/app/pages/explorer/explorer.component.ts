@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, computed } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -14,16 +14,18 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MonacoEditorModule } from 'ngx-monaco-editor-v2';
 import { TauriService } from '../../services/tauri.service';
 import { NotificationService } from '../../services/notification.service';
 import { ServerConfigService } from '../../services/server-config.service';
+import { ThemeService } from '../../services/theme.service';
+import { ScimSchemaService } from '../../services/scim-schema.service';
 import {
-  ServerConfig,
   ScimOperation,
   ExplorerResponse,
   ExplorerHistoryEntry,
   FieldMappingRule,
-  DiscoveredSchemaAttribute,
 } from '../../models/interfaces';
 
 // ── Operation Definitions ──
@@ -94,6 +96,28 @@ const SCIM_OPERATIONS: ScimOperation[] = [
     needsId: true,
     aiGeneratable: true,
     aiOperation: 'update_user',
+  },
+  {
+    id: 'patch_user',
+    name: 'Patch User',
+    method: 'PATCH',
+    pathTemplate: '/Users/{id}',
+    bodyTemplate: JSON.stringify({
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+      Operations: [{
+        op: 'replace',
+        value: {
+          displayName: 'Updated Name',
+          title: 'Updated Title',
+        },
+      }],
+    }, null, 2),
+    description: 'Partial update a user with any PatchOp operations',
+    icon: 'tune',
+    category: 'user',
+    needsId: true,
+    aiGeneratable: true,
+    aiOperation: 'patch_user',
   },
   {
     id: 'change_user_name',
@@ -187,6 +211,38 @@ const SCIM_OPERATIONS: ScimOperation[] = [
     aiGeneratable: false,
   },
   {
+    id: 'get_group',
+    name: 'Get Group',
+    method: 'GET',
+    pathTemplate: '/Groups/{id}',
+    description: 'Retrieve a single group by ID',
+    icon: 'group',
+    category: 'group',
+    needsId: true,
+    needsGroupId: true,
+    aiGeneratable: false,
+  },
+  {
+    id: 'update_group',
+    name: 'Update Group (PUT)',
+    method: 'PUT',
+    pathTemplate: '/Groups/{id}',
+    bodyTemplate: JSON.stringify({
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+      displayName: 'Engineering Team',
+      members: [
+        { value: '{userId}', display: 'User Name' },
+      ],
+    }, null, 2),
+    description: 'Full replacement update of a group',
+    icon: 'edit',
+    category: 'group',
+    needsId: true,
+    needsGroupId: true,
+    aiGeneratable: true,
+    aiOperation: 'update_group',
+  },
+  {
     id: 'add_user_to_group',
     name: 'Add User to Group',
     method: 'PATCH',
@@ -246,15 +302,42 @@ const SCIM_OPERATIONS: ScimOperation[] = [
     CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
     MatSelectModule, MatFormFieldModule, MatInputModule, MatTooltipModule,
     MatChipsModule, MatDividerModule, MatProgressSpinnerModule,
-    MatExpansionModule, MatTabsModule, MatBadgeModule
+    MatExpansionModule, MatTabsModule, MatBadgeModule, MatAutocompleteModule,
+    MonacoEditorModule
   ],
   templateUrl: './explorer.component.html',
   styleUrl: './explorer.component.scss',
 })
-export class ExplorerComponent implements OnInit {
+export class ExplorerComponent implements OnInit, OnDestroy {
   private tauriService = inject(TauriService);
   private notificationService = inject(NotificationService);
   serverConfigService = inject(ServerConfigService);
+  private themeService = inject(ThemeService);
+  scimSchemaService = inject(ScimSchemaService);
+
+  // Monaco editor
+  monacoEditor: any = null;
+  private monacoModel: any = null;
+  private modelContentListener: any = null;
+
+  editorOptions = computed(() => ({
+    theme: this.themeService.darkMode() ? 'vs-dark' : 'vs',
+    language: 'json',
+    automaticLayout: true,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    fontSize: 13,
+    lineNumbers: 'on' as const,
+    renderLineHighlight: 'all' as const,
+    bracketPairColorization: { enabled: true },
+    formatOnPaste: true,
+    tabSize: 2,
+    wordWrap: 'on' as const,
+    folding: true,
+    glyphMargin: false,
+    lineDecorationsWidth: 8,
+    padding: { top: 8, bottom: 8 },
+  }));
 
   // Operations
   operations = SCIM_OPERATIONS;
@@ -262,7 +345,6 @@ export class ExplorerComponent implements OnInit {
   groupOps = SCIM_OPERATIONS.filter(o => o.category === 'group');
 
   // State
-  selectedServer = signal<ServerConfig | null>(null);
   selectedOperation = signal<ScimOperation | null>(null);
   httpMethod = signal('GET');
   requestPath = signal('');
@@ -289,15 +371,80 @@ export class ExplorerComponent implements OnInit {
   enabledCustomFields = signal<Set<string>>(new Set());
   loadingMappings = signal(false);
 
-  // Schema discovery
-  discoveredAttributes = signal<DiscoveredSchemaAttribute[]>([]);
-  enabledSchemaAttrs = signal<Set<string>>(new Set());
-  loadingSchema = signal(false);
-  schemaLoaded = signal(false);
-
   // Session history
   sessionHistory = signal<ExplorerHistoryEntry[]>([]);
   showHistory = signal(false);
+
+  // Accordion & user picker for group member ops
+  opsExpanded = signal(true);
+  userSearchTerm = signal('');
+  pickedUsers = signal<{ id: string; userName: string; displayName: string }[]>([]);
+
+  // Batch operations (activate/deactivate/delete)
+  batchTargets = signal<{ id: string; displayName: string }[]>([]);
+  batchResults = signal<{ id: string; displayName: string; status: number; statusText: string }[]>([]);
+  batchSearchTerm = signal('');
+
+  /** Operations that support multi-user roster picker */
+  readonly ROSTER_OPS = new Set(['add_user_to_group', 'remove_user_from_group', 'update_group', 'create_group']);
+
+  /** Operations that support batch execution */
+  readonly BATCH_OPS = new Set(['activate_user', 'deactivate_user', 'delete_user', 'delete_group']);
+
+  constructor() {
+    // Register Explorer file matches for schema IntelliSense
+    this.scimSchemaService.addFileMatch('user', 'scim://explorer/user.json');
+    this.scimSchemaService.addFileMatch('group', 'scim://explorer/group.json');
+    this.scimSchemaService.addFileMatch('patchop', 'scim://explorer/patchop.json');
+
+    // Re-apply Monaco model when selected operation changes (swaps schema)
+    effect(() => {
+      const op = this.selectedOperation();
+      if (op && this.monacoEditor) {
+        // Defer to next tick so signal propagation completes
+        setTimeout(() => this.applyEditorModel(), 0);
+      }
+    });
+  }
+  filteredUsers = computed(() => {
+    const picked = new Set(this.pickedUsers().map(u => u.id));
+    const candidates = this.availableUsers().filter(u => !picked.has(u.id));
+    const term = this.userSearchTerm().toLowerCase();
+    if (!term) return candidates;
+    return candidates.filter(u =>
+      u.userName.toLowerCase().includes(term) ||
+      u.displayName.toLowerCase().includes(term) ||
+      u.id.toLowerCase().includes(term)
+    );
+  });
+
+  /** Whether the current operation uses the roster builder */
+  isRosterOp = computed(() => {
+    const op = this.selectedOperation();
+    return !!op && this.ROSTER_OPS.has(op.id);
+  });
+
+  /** Whether the current operation uses batch execution */
+  isBatchOp = computed(() => {
+    const op = this.selectedOperation();
+    return !!op && this.BATCH_OPS.has(op.id);
+  });
+
+  /** Filtered batch targets (users or groups not yet selected) */
+  filteredBatchTargets = computed(() => {
+    const selected = new Set(this.batchTargets().map(t => t.id));
+    const op = this.selectedOperation();
+    const isGroupOp = op?.id === 'delete_group';
+    const candidates = isGroupOp
+      ? this.availableGroups().map(g => ({ id: g.id, displayName: g.displayName }))
+      : this.availableUsers().map(u => ({ id: u.id, displayName: u.displayName || u.userName }));
+    const filtered = candidates.filter(c => !selected.has(c.id));
+    const term = this.batchSearchTerm().toLowerCase();
+    if (!term) return filtered;
+    return filtered.filter(c =>
+      c.displayName.toLowerCase().includes(term) || c.id.toLowerCase().includes(term)
+    );
+  });
 
   // Computed: rules applicable to current operation category
   applicableRules = computed(() => {
@@ -347,19 +494,6 @@ export class ExplorerComponent implements OnInit {
     } catch { /* ignore */ }
   }
 
-  selectServer(server: ServerConfig) {
-    this.selectedServer.set(server);
-    // Reset fetched data when server changes
-    this.availableUsers.set([]);
-    this.availableGroups.set([]);
-    this.enabledCustomFields.set(new Set());
-    this.discoveredAttributes.set([]);
-    this.enabledSchemaAttrs.set(new Set());
-    this.schemaLoaded.set(false);
-    // Fetch field mapping rules for this server
-    this.loadFieldMappings(server.id);
-  }
-
   async loadFieldMappings(serverConfigId: string) {
     this.loadingMappings.set(true);
     try {
@@ -369,94 +503,77 @@ export class ExplorerComponent implements OnInit {
     finally { this.loadingMappings.set(false); }
   }
 
-  async loadSchemaAttributes() {
-    const server = this.selectedServer();
-    if (!server) return;
-    this.loadingSchema.set(true);
-    try {
-      const attrs = await this.tauriService.discoverCustomSchema(server.id);
-      this.discoveredAttributes.set(attrs);
-      this.schemaLoaded.set(true);
-      if (attrs.length === 0) {
-        this.notificationService.info('No schema attributes discovered from server.');
-      } else {
-        this.notificationService.success(`Discovered ${attrs.length} attribute(s) from server schemas.`);
-      }
-    } catch (err: any) {
-      this.notificationService.error('Schema discovery failed: ' + (err?.message || err));
-    } finally {
-      this.loadingSchema.set(false);
+  deselectOperation() {
+    this.selectedOperation.set(null);
+    this.response.set(null);
+    this.opsExpanded.set(true);
+    this.showHistory.set(false);
+    this.disposeMonacoModel();
+  }
+
+  onMonacoInit(editor: any) {
+    this.monacoEditor = editor;
+    this.scimSchemaService.registerMonacoSchemas();
+    setTimeout(() => this.applyEditorModel(), 0);
+  }
+
+  /** Determine the schema type based on the current operation. */
+  private getEditorSchemaType(): 'user' | 'group' | 'patchop' {
+    const op = this.selectedOperation();
+    if (!op) return 'user';
+    if (op.method === 'PATCH') return 'patchop';
+    return op.category === 'group' ? 'group' : 'user';
+  }
+
+  /** Create/swap the Monaco model with a URI that routes to the correct schema. */
+  private applyEditorModel(): void {
+    if (!this.monacoEditor) return;
+    const monaco = (window as any).monaco;
+    if (!monaco) return;
+
+    // Dispose previous listener
+    if (this.modelContentListener) {
+      this.modelContentListener.dispose();
+      this.modelContentListener = null;
     }
-  }
 
-  /** Build a unique key for a discovered schema attribute */
-  schemaAttrKey(attr: DiscoveredSchemaAttribute): string {
-    return `${attr.schema_urn}:${attr.attr_name}`;
-  }
+    const schemaType = this.getEditorSchemaType();
+    const uriStr = this.scimSchemaService.getModelUri('explorer', schemaType);
+    const uri = monaco.Uri.parse(uriStr);
 
-  /** Build the SCIM attribute path for a discovered attribute */
-  schemaAttrPath(attr: DiscoveredSchemaAttribute): string {
-    // Core schema attributes go at the top level; extension attributes are namespaced
-    if (attr.schema_urn === 'urn:ietf:params:scim:schemas:core:2.0:User' ||
-        attr.schema_urn === 'urn:ietf:params:scim:schemas:core:2.0:Group') {
-      return attr.attr_name;
-    }
-    // Use ':' separator (SCIM convention) — parseScimPath handles this
-    return `${attr.schema_urn}:${attr.attr_name}`;
-  }
-
-  /** Guess a placeholder format from the discovered type */
-  private guessFormat(attrType: string): string {
-    switch (attrType.toLowerCase()) {
-      case 'boolean': return 'none';
-      case 'integer': case 'decimal': return 'none';
-      case 'reference': return 'uri';
-      default: return 'none';
-    }
-  }
-
-  /** Get an appropriate placeholder value based on the attribute type */
-  private getSchemaPlaceholder(attrType: string): any {
-    switch (attrType.toLowerCase()) {
-      case 'boolean': return true;
-      case 'integer': return 0;
-      case 'decimal': return 0.0;
-      case 'datetime': return new Date().toISOString();
-      case 'reference': return 'https://example.com/resource';
-      case 'complex': return {};
-      default: return 'value';
-    }
-  }
-
-  toggleSchemaAttr(attr: DiscoveredSchemaAttribute) {
-    const key = this.schemaAttrKey(attr);
-    const enabled = new Set(this.enabledSchemaAttrs());
-    const attrPath = this.schemaAttrPath(attr);
-    if (enabled.has(key)) {
-      enabled.delete(key);
-      this.removeScimAttribute(attrPath);
+    let model = monaco.editor.getModel(uri);
+    if (model) {
+      model.setValue(this.requestBody());
     } else {
-      enabled.add(key);
-      this.mergeScimAttributeWithValue(attrPath, this.getSchemaPlaceholder(attr.attr_type));
+      model = monaco.editor.createModel(this.requestBody(), 'json', uri);
     }
-    this.enabledSchemaAttrs.set(enabled);
+
+    const prevModel = this.monacoModel;
+    this.monacoModel = model;
+    this.monacoEditor.setModel(model);
+
+    if (prevModel && prevModel !== model) {
+      try { prevModel.dispose(); } catch (_) { /* already disposed */ }
+    }
+
+    this.modelContentListener = model.onDidChangeContent(() => {
+      this.requestBody.set(model.getValue());
+    });
   }
 
-  isSchemaAttrEnabled(attr: DiscoveredSchemaAttribute): boolean {
-    return this.enabledSchemaAttrs().has(this.schemaAttrKey(attr));
+  private disposeMonacoModel(): void {
+    if (this.modelContentListener) {
+      this.modelContentListener.dispose();
+      this.modelContentListener = null;
+    }
+    if (this.monacoModel) {
+      try { this.monacoModel.dispose(); } catch (_) { /* already disposed */ }
+      this.monacoModel = null;
+    }
   }
 
-  applyAllSchemaAttrs() {
-    const attrs = this.discoveredAttributes();
-    if (attrs.length === 0) return;
-    const enabled = new Set<string>();
-    for (const attr of attrs) {
-      const attrPath = this.schemaAttrPath(attr);
-      this.mergeScimAttributeWithValue(attrPath, this.getSchemaPlaceholder(attr.attr_type));
-      enabled.add(this.schemaAttrKey(attr));
-    }
-    this.enabledSchemaAttrs.set(enabled);
-    this.notificationService.success(`Applied ${attrs.length} schema attribute(s) to request body.`);
+  ngOnDestroy(): void {
+    this.disposeMonacoModel();
   }
 
   selectOperation(op: ScimOperation) {
@@ -472,12 +589,33 @@ export class ExplorerComponent implements OnInit {
     this.resourceId.set('');
     this.response.set(null);
 
+    // Clear previously picked users and batch targets
+    this.pickedUsers.set([]);
+    this.userSearchTerm.set('');
+    this.batchTargets.set([]);
+    this.batchResults.set([]);
+    this.batchSearchTerm.set('');
+
     // Auto-fetch resources if needed
     if (op.needsId && op.category === 'user' && this.availableUsers().length === 0) {
       this.fetchUsers();
     }
     if ((op.needsGroupId || (op.needsId && op.category === 'group')) && this.availableGroups().length === 0) {
       this.fetchGroups();
+    }
+
+    // For roster ops (group member management + create group), also fetch users for the picker
+    if (this.ROSTER_OPS.has(op.id) && this.availableUsers().length === 0) {
+      this.fetchUsers();
+    }
+
+    // For batch ops, fetch the appropriate resource list
+    if (this.BATCH_OPS.has(op.id)) {
+      if (op.id === 'delete_group' && this.availableGroups().length === 0) {
+        this.fetchGroups();
+      } else if (op.id !== 'delete_group' && this.availableUsers().length === 0) {
+        this.fetchUsers();
+      }
     }
   }
 
@@ -489,12 +627,117 @@ export class ExplorerComponent implements OnInit {
     }
   }
 
+  // ── Roster Builder (multi-user picker for group ops) ──
+
+  addUserToRoster(userId: string) {
+    const user = this.availableUsers().find(u => u.id === userId);
+    if (!user) return;
+    // Avoid duplicates
+    if (this.pickedUsers().some(u => u.id === userId)) return;
+    this.pickedUsers.update(list => [...list, user]);
+    this.userSearchTerm.set('');
+    this.rebuildMemberBody();
+  }
+
+  removeUserFromRoster(userId: string) {
+    this.pickedUsers.update(list => list.filter(u => u.id !== userId));
+    this.rebuildMemberBody();
+  }
+
+  clearAllRosterUsers() {
+    this.pickedUsers.set([]);
+    this.rebuildMemberBody();
+  }
+
+  /** Rebuild the request body JSON from the current pickedUsers roster */
+  private rebuildMemberBody() {
+    const op = this.selectedOperation();
+    if (!op) return;
+    const users = this.pickedUsers();
+
+    if (op.id === 'add_user_to_group') {
+      const body = {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+        Operations: [{
+          op: 'add',
+          path: 'members',
+          value: users.map(u => ({ value: u.id, display: u.displayName })),
+        }],
+      };
+      this.requestBody.set(JSON.stringify(body, null, 2));
+    } else if (op.id === 'remove_user_from_group') {
+      const body = {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+        Operations: users.map(u => ({
+          op: 'remove',
+          path: `members[value eq "${u.id}"]`,
+        })),
+      };
+      this.requestBody.set(JSON.stringify(body, null, 2));
+    } else if (op.id === 'update_group') {
+      // Preserve the displayName from the current body if present
+      let displayName = 'Engineering Team';
+      try {
+        const current = JSON.parse(this.requestBody());
+        if (current.displayName) displayName = current.displayName;
+      } catch { /* use default */ }
+      const body = {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+        displayName,
+        members: users.map(u => ({ value: u.id, display: u.displayName })),
+      };
+      this.requestBody.set(JSON.stringify(body, null, 2));
+    } else if (op.id === 'create_group') {
+      // Preserve the displayName from the current body if present
+      let displayName = 'Engineering Team';
+      try {
+        const current = JSON.parse(this.requestBody());
+        if (current.displayName) displayName = current.displayName;
+      } catch { /* use default */ }
+      const body = {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+        displayName,
+        members: users.map(u => ({ value: u.id, display: u.displayName })),
+      };
+      this.requestBody.set(JSON.stringify(body, null, 2));
+    }
+  }
+
+  // ── Batch Operations ──
+
+  addBatchTarget(id: string) {
+    const op = this.selectedOperation();
+    const isGroupOp = op?.id === 'delete_group';
+    let target: { id: string; displayName: string } | undefined;
+    if (isGroupOp) {
+      const g = this.availableGroups().find(x => x.id === id);
+      if (g) target = { id: g.id, displayName: g.displayName };
+    } else {
+      const u = this.availableUsers().find(x => x.id === id);
+      if (u) target = { id: u.id, displayName: u.displayName || u.userName };
+    }
+    if (!target) return;
+    if (this.batchTargets().some(t => t.id === id)) return;
+    this.batchTargets.update(list => [...list, target!]);
+    this.batchSearchTerm.set('');
+  }
+
+  removeBatchTarget(id: string) {
+    this.batchTargets.update(list => list.filter(t => t.id !== id));
+  }
+
+  clearBatchTargets() {
+    this.batchTargets.set([]);
+    this.batchResults.set([]);
+  }
+
   async fetchUsers() {
-    if (!this.selectedServer()) return;
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
     this.fetchingUsers.set(true);
     try {
       const resp = await this.tauriService.executeScimRequest({
-        server_config_id: this.selectedServer()!.id,
+        server_config_id: server.id,
         method: 'GET',
         path: '/Users',
         query_params: 'startIndex=1&count=100',
@@ -515,11 +758,12 @@ export class ExplorerComponent implements OnInit {
   }
 
   async fetchGroups() {
-    if (!this.selectedServer()) return;
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
     this.fetchingGroups.set(true);
     try {
       const resp = await this.tauriService.executeScimRequest({
-        server_config_id: this.selectedServer()!.id,
+        server_config_id: server.id,
         method: 'GET',
         path: '/Groups',
         query_params: 'startIndex=1&count=100',
@@ -539,8 +783,15 @@ export class ExplorerComponent implements OnInit {
   }
 
   async sendRequest() {
-    if (!this.selectedServer()) {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) {
       this.notificationService.error('Select a server first.');
+      return;
+    }
+
+    // Batch mode: execute the same operation for each target
+    if (this.isBatchOp() && this.batchTargets().length > 0) {
+      await this.executeBatch(server.id);
       return;
     }
 
@@ -549,7 +800,7 @@ export class ExplorerComponent implements OnInit {
 
     try {
       const resp = await this.tauriService.executeScimRequest({
-        server_config_id: this.selectedServer()!.id,
+        server_config_id: server.id,
         method: this.httpMethod(),
         path: this.requestPath(),
         body: this.hasBody() ? this.requestBody() : undefined,
@@ -626,6 +877,67 @@ export class ExplorerComponent implements OnInit {
     }
   }
 
+  /** Execute a batch of requests for batch operations (activate/deactivate/delete) */
+  private async executeBatch(serverId: string) {
+    const op = this.selectedOperation();
+    if (!op) return;
+    const targets = this.batchTargets();
+    if (targets.length === 0) return;
+
+    this.loading.set(true);
+    this.batchResults.set([]);
+    this.response.set(null);
+    const results: { id: string; displayName: string; status: number; statusText: string }[] = [];
+
+    for (const target of targets) {
+      const path = op.pathTemplate.replace('{id}', target.id);
+      try {
+        const resp = await this.tauriService.executeScimRequest({
+          server_config_id: serverId,
+          method: op.method,
+          path,
+          body: op.bodyTemplate || undefined,
+        });
+        results.push({
+          id: target.id,
+          displayName: target.displayName,
+          status: resp.status,
+          statusText: resp.status_text,
+        });
+
+        // Add each to session history
+        this.sessionHistory.update(h => [{
+          id: crypto.randomUUID(),
+          operation: op,
+          method: op.method,
+          path,
+          requestBody: op.bodyTemplate || undefined,
+          response: resp,
+          timestamp: new Date().toISOString(),
+        }, ...h].slice(0, 50));
+      } catch (err: any) {
+        results.push({
+          id: target.id,
+          displayName: target.displayName,
+          status: 0,
+          statusText: err?.message || 'Network Error',
+        });
+      }
+    }
+
+    this.batchResults.set(results);
+    const succeeded = results.filter(r => r.status >= 200 && r.status < 300).length;
+    const failed = results.length - succeeded;
+    if (failed === 0) {
+      this.notificationService.success(`All ${succeeded} requests succeeded.`);
+    } else if (succeeded === 0) {
+      this.notificationService.error(`All ${failed} requests failed.`);
+    } else {
+      this.notificationService.info(`${succeeded} succeeded, ${failed} failed.`);
+    }
+    this.loading.set(false);
+  }
+
   async generateWithAi() {
     const op = this.selectedOperation();
     if (!op?.aiOperation) return;
@@ -685,11 +997,15 @@ export class ExplorerComponent implements OnInit {
   }
 
   formatBody() {
-    try {
-      const formatted = JSON.stringify(JSON.parse(this.requestBody()), null, 2);
-      this.requestBody.set(formatted);
-    } catch {
-      this.notificationService.error('Invalid JSON — cannot format.');
+    if (this.monacoEditor) {
+      this.monacoEditor.getAction('editor.action.formatDocument')?.run();
+    } else {
+      try {
+        const formatted = JSON.stringify(JSON.parse(this.requestBody()), null, 2);
+        this.requestBody.set(formatted);
+      } catch {
+        this.notificationService.error('Invalid JSON — cannot format.');
+      }
     }
   }
 

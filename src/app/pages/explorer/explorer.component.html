@@ -1,77 +1,63 @@
-<div class="explorer-page">
-  <h2>SCIM Explorer</h2>
-  <p class="subtitle">Send pre-filled SCIM 2.0 requests — edit anything before sending.</p>
+<div class="explorer-page" [class.op-active]="!!selectedOperation()">
+  @if (serverConfigService.selectedConfig()) {
 
-  <!-- Server Picker -->
-  <mat-card class="server-picker-card">
-    <mat-card-content>
-      <mat-form-field appearance="outline" class="server-select">
-        <mat-label>Target Server</mat-label>
-        <mat-select
-          [value]="selectedServer()"
-          (selectionChange)="selectServer($event.value)"
-        >
-          @for (server of serverConfigService.serverConfigs(); track server.id) {
-            <mat-option [value]="server">
-              {{ server.name }} — {{ server.base_url }}
-            </mat-option>
-          }
-        </mat-select>
-        <mat-icon matPrefix>dns</mat-icon>
-      </mat-form-field>
-      @if (!selectedServer()) {
-        <p class="server-hint">Select a server to start exploring SCIM operations.</p>
-      }
-    </mat-card-content>
-  </mat-card>
-
-  @if (selectedServer()) {
-
+  @if (!selectedOperation()) {
   <!-- Operation Picker -->
-  <mat-card class="operations-card">
-    <mat-card-content>
-      <div class="operation-section">
-        <h3><mat-icon>person</mat-icon> User Operations</h3>
-        <div class="operation-chips">
-          @for (op of userOps; track op.id) {
-            <button
-              mat-stroked-button
-              class="operation-chip"
-              [class.selected]="selectedOperation()?.id === op.id"
-              [matTooltip]="op.description"
-              (click)="selectOperation(op)"
-            >
-              <mat-icon>{{ op.icon }}</mat-icon>
-              {{ op.name }}
-            </button>
-          }
-        </div>
+  <mat-accordion class="operations-accordion" multi>
+    <mat-expansion-panel [expanded]="opsExpanded()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>person</mat-icon> User Operations
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <div class="operation-chips">
+        @for (op of userOps; track op.id) {
+          <button
+            mat-stroked-button
+            class="operation-chip"
+            [matTooltip]="op.description"
+            (click)="selectOperation(op)"
+          >
+            <mat-icon>{{ op.icon }}</mat-icon>
+            {{ op.name }}
+          </button>
+        }
       </div>
+    </mat-expansion-panel>
 
-      <mat-divider></mat-divider>
-
-      <div class="operation-section">
-        <h3><mat-icon>group</mat-icon> Group Operations</h3>
-        <div class="operation-chips">
-          @for (op of groupOps; track op.id) {
-            <button
-              mat-stroked-button
-              class="operation-chip"
-              [class.selected]="selectedOperation()?.id === op.id"
-              [matTooltip]="op.description"
-              (click)="selectOperation(op)"
-            >
-              <mat-icon>{{ op.icon }}</mat-icon>
-              {{ op.name }}
-            </button>
-          }
-        </div>
+    <mat-expansion-panel [expanded]="opsExpanded()">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>group</mat-icon> Group Operations
+        </mat-panel-title>
+      </mat-expansion-panel-header>
+      <div class="operation-chips">
+        @for (op of groupOps; track op.id) {
+          <button
+            mat-stroked-button
+            class="operation-chip"
+            [matTooltip]="op.description"
+            (click)="selectOperation(op)"
+          >
+            <mat-icon>{{ op.icon }}</mat-icon>
+            {{ op.name }}
+          </button>
+        }
       </div>
-    </mat-card-content>
-  </mat-card>
+    </mat-expansion-panel>
+  </mat-accordion>
+  }
 
-  <!-- Request / Response Split -->
+  <!-- Selected Operation Bar + Request / Response -->
   @if (selectedOperation()) {
+    <div class="selected-op-bar">
+      <button mat-icon-button (click)="deselectOperation()" matTooltip="Back to operations">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <span class="op-method-badge" [class]="'method-' + httpMethod().toLowerCase()">{{ httpMethod() }}</span>
+      <span class="op-name">{{ selectedOperation()!.name }}</span>
+      <span class="op-path">{{ requestPath() }}</span>
+    </div>
     <div class="request-response-container">
       <!-- Left: Request Panel -->
       <mat-card class="request-panel">
@@ -99,8 +85,8 @@
             </mat-form-field>
           </div>
 
-          <!-- Resource ID picker -->
-          @if (selectedOperation()!.needsId) {
+          <!-- Resource ID picker (hidden for batch ops — they have their own picker) -->
+          @if (selectedOperation()!.needsId && !isBatchOp()) {
             <div class="id-picker-row">
               @if (selectedOperation()!.category === 'user' || !selectedOperation()!.needsGroupId) {
                 <mat-form-field appearance="outline" class="id-field">
@@ -168,6 +154,137 @@
             </div>
           }
 
+          <!-- Roster Builder: Multi-user picker for group member/update/create operations -->
+          @if (isRosterOp()) {
+            <div class="user-picker-section">
+              <div class="picker-header">
+                <mat-icon>person_search</mat-icon>
+                @switch (selectedOperation()?.id) {
+                  @case ('add_user_to_group') { Select Users to Add }
+                  @case ('remove_user_from_group') { Select Users to Remove }
+                  @case ('update_group') { Set Group Members }
+                  @case ('create_group') { Add Initial Members (optional) }
+                }
+                @if (pickedUsers().length > 0) {
+                  <span class="picker-count">{{ pickedUsers().length }} selected</span>
+                }
+              </div>
+              <mat-form-field appearance="outline" class="picker-field">
+                <mat-label>Search users</mat-label>
+                <input matInput
+                  [ngModel]="userSearchTerm()"
+                  (ngModelChange)="userSearchTerm.set($event)"
+                  [matAutocomplete]="userAuto"
+                  placeholder="Type to search by name or username..."
+                />
+                <mat-autocomplete #userAuto="matAutocomplete" (optionSelected)="addUserToRoster($event.option.value)">
+                  @for (u of filteredUsers(); track u.id) {
+                    <mat-option [value]="u.id">
+                      <span>{{ u.displayName || u.userName }}</span>
+                      <small style="margin-left: 8px; opacity: 0.6">{{ u.userName }}</small>
+                    </mat-option>
+                  }
+                  @if (filteredUsers().length === 0 && userSearchTerm()) {
+                    <mat-option disabled>No matching users found</mat-option>
+                  }
+                </mat-autocomplete>
+                <mat-hint>
+                  @if (fetchingUsers()) {
+                    <mat-spinner diameter="14"></mat-spinner> Fetching users from server…
+                  } @else if (availableUsers().length === 0) {
+                    No users loaded yet — fetching…
+                  } @else {
+                    {{ availableUsers().length }} users available
+                  }
+                </mat-hint>
+              </mat-form-field>
+              @if (pickedUsers().length > 0) {
+                <div class="selected-users-list">
+                  @for (u of pickedUsers(); track u.id) {
+                    <div class="selected-user-chip">
+                      <mat-icon style="font-size: 16px; width: 16px; height: 16px">person</mat-icon>
+                      {{ u.displayName || u.userName }}
+                      <span class="user-id">({{ u.id | slice:0:8 }}…)</span>
+                      <button mat-icon-button style="width: 24px; height: 24px; line-height: 24px" (click)="removeUserFromRoster(u.id)">
+                        <mat-icon style="font-size: 14px; width: 14px; height: 14px">close</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+                @if (pickedUsers().length > 1) {
+                  <button mat-button class="clear-all-btn" (click)="clearAllRosterUsers()">
+                    <mat-icon>clear_all</mat-icon> Clear All
+                  </button>
+                }
+              }
+            </div>
+          }
+
+          <!-- Batch Picker: Multi-select for activate/deactivate/delete operations -->
+          @if (isBatchOp()) {
+            <div class="user-picker-section batch-picker-section">
+              <div class="picker-header">
+                <mat-icon>{{ selectedOperation()?.id === 'delete_group' ? 'groups' : 'people' }}</mat-icon>
+                @switch (selectedOperation()?.id) {
+                  @case ('activate_user') { Select Users to Activate }
+                  @case ('deactivate_user') { Select Users to Deactivate }
+                  @case ('delete_user') { Select Users to Delete }
+                  @case ('delete_group') { Select Groups to Delete }
+                }
+                @if (batchTargets().length > 0) {
+                  <span class="picker-count">{{ batchTargets().length }} selected</span>
+                }
+              </div>
+              <mat-form-field appearance="outline" class="picker-field">
+                <mat-label>Search {{ selectedOperation()?.id === 'delete_group' ? 'groups' : 'users' }}</mat-label>
+                <input matInput
+                  [ngModel]="batchSearchTerm()"
+                  (ngModelChange)="batchSearchTerm.set($event)"
+                  [matAutocomplete]="batchAuto"
+                  placeholder="Type to search..."
+                />
+                <mat-autocomplete #batchAuto="matAutocomplete" (optionSelected)="addBatchTarget($event.option.value)">
+                  @for (t of filteredBatchTargets(); track t.id) {
+                    <mat-option [value]="t.id">
+                      {{ t.displayName }} ({{ t.id | slice:0:8 }}…)
+                    </mat-option>
+                  }
+                  @if (filteredBatchTargets().length === 0 && batchSearchTerm()) {
+                    <mat-option disabled>No matches found</mat-option>
+                  }
+                </mat-autocomplete>
+                <mat-hint>
+                  @if (fetchingUsers() || fetchingGroups()) {
+                    <mat-spinner diameter="14"></mat-spinner> Fetching…
+                  } @else {
+                    {{ selectedOperation()?.id === 'delete_group' ? availableGroups().length : availableUsers().length }} available
+                  }
+                </mat-hint>
+              </mat-form-field>
+              @if (batchTargets().length > 0) {
+                <div class="selected-users-list">
+                  @for (t of batchTargets(); track t.id) {
+                    <div class="selected-user-chip">
+                      <mat-icon style="font-size: 16px; width: 16px; height: 16px">
+                        {{ selectedOperation()?.id === 'delete_group' ? 'group' : 'person' }}
+                      </mat-icon>
+                      {{ t.displayName }}
+                      <span class="user-id">({{ t.id | slice:0:8 }}…)</span>
+                      <button mat-icon-button style="width: 24px; height: 24px; line-height: 24px" (click)="removeBatchTarget(t.id)">
+                        <mat-icon style="font-size: 14px; width: 14px; height: 14px">close</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+                @if (batchTargets().length > 1) {
+                  <button mat-button class="clear-all-btn" (click)="clearBatchTargets()">
+                    <mat-icon>clear_all</mat-icon> Clear All
+                  </button>
+                }
+              }
+            </div>
+          }
+
           <!-- Query params -->
           @if (queryParams()) {
             <mat-form-field appearance="outline" class="full-width">
@@ -219,72 +336,6 @@
             </div>
           }
 
-          <!-- Schema Discovery -->
-          @if (hasBody()) {
-            <div class="schema-discovery-section">
-              <div class="custom-fields-header">
-                <span>
-                  <mat-icon>schema</mat-icon>
-                  Schema Attributes
-                  @if (discoveredAttributes().length > 0) {
-                    <span class="field-count">({{ discoveredAttributes().length }})</span>
-                  }
-                </span>
-                <div class="schema-actions">
-                  @if (discoveredAttributes().length > 0) {
-                    <button
-                      mat-button
-                      color="primary"
-                      (click)="applyAllSchemaAttrs()"
-                      matTooltip="Add all discovered attributes to request body"
-                    >
-                      <mat-icon>playlist_add</mat-icon> Apply All
-                    </button>
-                  }
-                  <button
-                    mat-stroked-button
-                    color="primary"
-                    (click)="loadSchemaAttributes()"
-                    [disabled]="loadingSchema()"
-                    matTooltip="Discover attributes from the server's /Schemas endpoint"
-                  >
-                    @if (loadingSchema()) {
-                      <mat-spinner diameter="18"></mat-spinner>
-                    } @else {
-                      <mat-icon>cloud_download</mat-icon>
-                    }
-                    {{ schemaLoaded() ? 'Reload' : 'Load from Server' }}
-                  </button>
-                </div>
-              </div>
-              @if (discoveredAttributes().length > 0) {
-                <div class="custom-field-chips">
-                  @for (attr of discoveredAttributes(); track schemaAttrKey(attr)) {
-                    <button
-                      mat-stroked-button
-                      class="custom-field-chip schema-chip"
-                      [class.enabled]="isSchemaAttrEnabled(attr)"
-                      [matTooltip]="attr.schema_urn + ' → ' + attr.attr_name + ' (' + attr.attr_type + ')'"
-                      (click)="toggleSchemaAttr(attr)"
-                    >
-                      @if (isSchemaAttrEnabled(attr)) {
-                        <mat-icon>check_circle</mat-icon>
-                      } @else {
-                        <mat-icon>add_circle_outline</mat-icon>
-                      }
-                      {{ attr.attr_name }}
-                      <span class="attr-type-badge">{{ attr.attr_type }}</span>
-                    </button>
-                  }
-                </div>
-              } @else if (schemaLoaded()) {
-                <p class="schema-empty-hint">No extension attributes found in server schemas.</p>
-              } @else {
-                <p class="schema-empty-hint">Click "Load from Server" to discover attributes from the SCIM /Schemas endpoint.</p>
-              }
-            </div>
-          }
-
           <!-- Body editor -->
           @if (hasBody()) {
             <div class="body-editor-header">
@@ -311,13 +362,14 @@
                 </button>
               </div>
             </div>
-            <textarea
-              class="body-textarea"
-              [ngModel]="requestBody()"
-              (ngModelChange)="requestBody.set($event)"
-              rows="14"
-              spellcheck="false"
-            ></textarea>
+            <div class="monaco-wrapper">
+              <ngx-monaco-editor
+                [options]="editorOptions()"
+                [ngModel]="requestBody()"
+                (ngModelChange)="requestBody.set($event)"
+                (onInit)="onMonacoInit($event)"
+              ></ngx-monaco-editor>
+            </div>
           }
 
           <!-- Send button -->
@@ -327,14 +379,18 @@
               color="primary"
               class="send-btn"
               (click)="sendRequest()"
-              [disabled]="loading()"
+              [disabled]="loading() || (isBatchOp() && batchTargets().length === 0)"
             >
               @if (loading()) {
                 <mat-spinner diameter="20"></mat-spinner>
               } @else {
                 <mat-icon>send</mat-icon>
               }
-              Send Request
+              @if (isBatchOp() && batchTargets().length > 0) {
+                Send {{ batchTargets().length }} Requests
+              } @else {
+                Send Request
+              }
             </button>
 
             <button
@@ -348,6 +404,32 @@
               History
             </button>
           </div>
+
+          <!-- Batch Results Table -->
+          @if (batchResults().length > 0) {
+            <div class="batch-results">
+              <div class="batch-results-header">
+                <mat-icon>assessment</mat-icon>
+                Batch Results ({{ batchResults().length }})
+              </div>
+              <div class="batch-results-table">
+                @for (r of batchResults(); track r.id) {
+                  <div class="batch-result-row" [class.success]="r.status >= 200 && r.status < 300" [class.error]="r.status < 200 || r.status >= 300">
+                    <span class="batch-result-name">{{ r.displayName }}</span>
+                    <span class="batch-result-id">({{ r.id | slice:0:8 }}…)</span>
+                    <span class="batch-result-status">
+                      @if (r.status >= 200 && r.status < 300) {
+                        <mat-icon style="font-size: 16px; width: 16px; height: 16px; color: #4caf50">check_circle</mat-icon>
+                      } @else {
+                        <mat-icon style="font-size: 16px; width: 16px; height: 16px; color: #f44336">error</mat-icon>
+                      }
+                      {{ r.status }} {{ r.statusText }}
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
         </mat-card-content>
       </mat-card>
 
@@ -406,44 +488,44 @@
         </mat-card-content>
       </mat-card>
     </div>
+
+    <!-- Session History (inside op-active layout) -->
+    @if (showHistory()) {
+      <mat-card class="history-card">
+        <mat-card-header>
+          <mat-card-title>Session History</mat-card-title>
+          @if (sessionHistory().length > 0) {
+            <button mat-button color="warn" (click)="clearHistory()">
+              <mat-icon>delete_sweep</mat-icon> Clear
+            </button>
+          }
+        </mat-card-header>
+        <mat-card-content>
+          @if (sessionHistory().length > 0) {
+            <div class="history-list">
+              @for (entry of sessionHistory(); track entry.id) {
+                <button class="history-entry" (click)="loadHistoryEntry(entry)">
+                  <span class="history-method" [style.color]="getMethodColor(entry.method)">
+                    {{ entry.method }}
+                  </span>
+                  <span class="history-path">{{ entry.path }}</span>
+                  <span class="history-status" [class]="'status-' + (entry.response.status >= 200 && entry.response.status < 300 ? '2xx' : entry.response.status >= 400 && entry.response.status < 500 ? '4xx' : '5xx')">
+                    {{ entry.response.status }}
+                  </span>
+                  <span class="history-time">{{ formatTime(entry.timestamp) }}</span>
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="history-empty">
+              <mat-icon>history</mat-icon>
+              <p>No requests yet. Send a request and it will appear here.</p>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
   }
 
-  <!-- Session History -->
-  @if (showHistory()) {
-    <mat-card class="history-card">
-      <mat-card-header>
-        <mat-card-title>Session History</mat-card-title>
-        @if (sessionHistory().length > 0) {
-          <button mat-button color="warn" (click)="clearHistory()">
-            <mat-icon>delete_sweep</mat-icon> Clear
-          </button>
-        }
-      </mat-card-header>
-      <mat-card-content>
-        @if (sessionHistory().length > 0) {
-          <div class="history-list">
-            @for (entry of sessionHistory(); track entry.id) {
-              <button class="history-entry" (click)="loadHistoryEntry(entry)">
-                <span class="history-method" [style.color]="getMethodColor(entry.method)">
-                  {{ entry.method }}
-                </span>
-                <span class="history-path">{{ entry.path }}</span>
-                <span class="history-status" [class]="'status-' + (entry.response.status >= 200 && entry.response.status < 300 ? '2xx' : entry.response.status >= 400 && entry.response.status < 500 ? '4xx' : '5xx')">
-                  {{ entry.response.status }}
-                </span>
-                <span class="history-time">{{ formatTime(entry.timestamp) }}</span>
-              </button>
-            }
-          </div>
-        } @else {
-          <div class="history-empty">
-            <mat-icon>history</mat-icon>
-            <p>No requests yet. Send a request and it will appear here.</p>
-          </div>
-        }
-      </mat-card-content>
-    </mat-card>
-  }
-
-  } <!-- end @if selectedServer -->
+  } <!-- end @if selectedConfig -->
 </div>

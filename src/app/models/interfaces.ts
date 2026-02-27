@@ -55,11 +55,12 @@ export interface CategorySummary {
   failed: number;
 }
 
-export type LoadTestScenario = 'create_users' | 'create_update' | 'full_lifecycle' | 'list_users';
+export type LoadTestScenario = 'create_users' | 'create_update' | 'full_lifecycle' | 'list_users' | 'create_groups' | 'group_lifecycle' | 'add_remove_members' | 'update_groups';
 
 export interface LoadTestConfig {
   server_config_id: string;
   scenario?: LoadTestScenario;
+  scenarios?: LoadTestScenario[];  // multi-scenario: run in parallel
   endpoints: LoadTestEndpoint[];
   total_requests: number;
   concurrency: number;
@@ -107,6 +108,8 @@ export interface ValidationRunConfig {
   server_config_id: string;
   categories: string[];
   field_mapping_rules?: FieldMappingRule[];
+  user_joining_property?: string;   // e.g. 'userName' (default)
+  group_joining_property?: string;  // e.g. 'displayName' (default)
 }
 
 export interface ValidationProgress {
@@ -214,4 +217,17 @@ export interface ExplorerHistoryEntry {
   requestBody?: string;
   response: ExplorerResponse;
   timestamp: string;
+}
+
+// ── Sample Data ──
+
+export interface SampleData {
+  id: string;
+  server_config_id: string;
+  resource_type: 'user' | 'group';
+  name: string;
+  data_json: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }

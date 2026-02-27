@@ -14,97 +14,6 @@
     }
   }
 
-  .server-selector-card {
-    margin-bottom: 28px;
-
-    mat-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .server-select-row {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-
-      .server-select-field {
-        flex: 1;
-        max-width: 480px;
-      }
-
-      .selected-server-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-
-        .server-badge {
-          background: #1976d2;
-          color: #fff;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-        }
-
-        .server-url {
-          font-family: monospace;
-          font-size: 13px;
-          color: rgba(0, 0, 0, 0.6);
-        }
-      }
-    }
-
-    .no-servers-prompt {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 32px 0;
-      gap: 12px;
-      color: rgba(0, 0, 0, 0.54);
-
-      mat-icon {
-        font-size: 40px;
-        height: 40px;
-        width: 40px;
-        opacity: 0.4;
-      }
-
-      p {
-        margin: 0;
-        font-size: 14px;
-      }
-    }
-
-    .quick-connect-form {
-      margin-top: 20px;
-      padding-top: 20px;
-
-      h3 {
-        margin: 12px 0 12px;
-        font-size: 15px;
-        font-weight: 500;
-      }
-
-      .quick-connect-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px 24px;
-
-        @media (max-width: 600px) {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .quick-connect-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 12px;
-      }
-    }
-  }
-
   .config-card {
     margin-bottom: 28px;
 
@@ -126,22 +35,40 @@
         margin: 0 0 12px;
         font-size: 16px;
         font-weight: 500;
+
+        .selected-count {
+          font-weight: 400;
+          font-size: 13px;
+          color: rgba(0, 0, 0, 0.54);
+        }
+      }
+
+      .scenario-group-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 16px 0 10px;
+        font-size: 14px;
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.7);
+
+        mat-icon {
+          font-size: 18px;
+          height: 18px;
+          width: 18px;
+        }
       }
 
       .scenario-cards {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
-
-        @media (max-width: 800px) {
-          grid-template-columns: 1fr;
-        }
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
       }
 
       .scenario-card {
         border: 2px solid rgba(0, 0, 0, 0.12);
         border-radius: 12px;
-        padding: 20px;
+        padding: 16px;
         cursor: pointer;
         transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
@@ -172,6 +99,14 @@
           .scenario-name {
             font-size: 15px;
             font-weight: 600;
+            flex: 1;
+          }
+
+          .check-icon {
+            color: #1976d2;
+            font-size: 20px;
+            height: 20px;
+            width: 20px;
           }
         }
 
@@ -323,27 +258,41 @@
       color: rgba(255, 255, 255, 0.54);
     }
 
-    .scenario-section .scenario-card {
-      border-color: rgba(255, 255, 255, 0.12);
-
-      &:hover {
-        border-color: rgba(100, 181, 246, 0.4);
-        background: rgba(100, 181, 246, 0.04);
+    .scenario-section {
+      h3 .selected-count {
+        color: rgba(255, 255, 255, 0.5);
       }
 
-      &.selected {
-        border-color: #64b5f6;
-        background: rgba(100, 181, 246, 0.08);
-        box-shadow: 0 0 0 1px #64b5f6;
+      .scenario-group-label {
+        color: rgba(255, 255, 255, 0.7);
       }
 
-      .scenario-desc {
-        color: rgba(255, 255, 255, 0.6);
-      }
+      .scenario-card {
+        border-color: rgba(255, 255, 255, 0.12);
 
-      .scenario-ops .op-badge {
-        background: rgba(100, 181, 246, 0.15);
-        color: #90caf9;
+        &:hover {
+          border-color: rgba(100, 181, 246, 0.4);
+          background: rgba(100, 181, 246, 0.04);
+        }
+
+        &.selected {
+          border-color: #64b5f6;
+          background: rgba(100, 181, 246, 0.08);
+          box-shadow: 0 0 0 1px #64b5f6;
+        }
+
+        .scenario-card-header .check-icon {
+          color: #64b5f6;
+        }
+
+        .scenario-desc {
+          color: rgba(255, 255, 255, 0.6);
+        }
+
+        .scenario-ops .op-badge {
+          background: rgba(100, 181, 246, 0.15);
+          color: #90caf9;
+        }
       }
     }
 

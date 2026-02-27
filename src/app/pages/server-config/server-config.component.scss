@@ -42,7 +42,7 @@
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0 16px;
+      gap: 16px 16px;
 
       .full-width {
         grid-column: 1 / -1;

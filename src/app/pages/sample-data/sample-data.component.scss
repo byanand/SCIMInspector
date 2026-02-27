@@ -1,0 +1,297 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  width: 100%;
+  overflow: hidden;
+}
+
+.sample-data-container {
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+  }
+
+  .subtitle {
+    margin: 4px 0 0;
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 14px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+}
+
+.info-card {
+  mat-card-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: rgba(0, 0, 0, 0.6);
+
+    mat-icon {
+      color: #1976d2;
+    }
+  }
+}
+
+.editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  .editor-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .editor-panel-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+  }
+
+  .editor-meta-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 8px;
+
+    .name-field {
+      flex: 1;
+    }
+
+    .type-field {
+      width: 140px;
+    }
+  }
+
+  .json-error {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+  }
+
+  .monaco-wrapper {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+
+    ngx-monaco-editor {
+      display: block;
+      height: 100% !important;
+      width: 100%;
+    }
+
+    ::ng-deep .editor-container {
+      height: 100% !important;
+    }
+  }
+}
+
+.schema-status-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.5);
+
+  .schema-hint-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: #1976d2;
+  }
+
+  kbd {
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-family: monospace;
+  }
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px;
+  color: rgba(0, 0, 0, 0.4);
+
+  mat-icon {
+    font-size: 48px;
+    height: 48px;
+    width: 48px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.data-card {
+  .type-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+
+    &.user-icon {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    &.group-icon {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+  }
+
+  .default-badge {
+    font-size: 14px;
+    height: 14px;
+    width: 14px;
+    color: #2e7d32;
+    vertical-align: text-bottom;
+    margin-right: 2px;
+  }
+
+  .json-preview {
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    background: #f5f5f5;
+    padding: 8px;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow: hidden;
+    color: rgba(0, 0, 0, 0.7);
+    margin: 0;
+  }
+}
+
+// ── Dark theme ──
+:host-context(.dark-theme) {
+  .page-header .subtitle {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .info-card mat-card-content {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .editor-panel {
+    .json-error {
+      background: #4e342e;
+      color: #ffab91;
+    }
+
+    .monaco-wrapper {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+  }
+
+  .loading-state,
+  .empty-state {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .data-card {
+    .type-icon {
+      &.user-icon {
+        background: rgba(25, 118, 210, 0.15);
+        color: #90caf9;
+      }
+
+      &.group-icon {
+        background: rgba(123, 31, 162, 0.15);
+        color: #ce93d8;
+      }
+    }
+
+    .default-badge {
+      color: #66bb6a;
+    }
+
+    .json-preview {
+      background: #1e1e1e;
+      color: rgba(255, 255, 255, 0.7);
+    }
+  }
+
+  .schema-status-hint {
+    color: rgba(255, 255, 255, 0.4);
+
+    .schema-hint-icon {
+      color: #90caf9;
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+  }
+}

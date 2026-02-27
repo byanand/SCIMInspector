@@ -17,7 +17,7 @@ import { MatInputModule } from '@angular/material/input';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { ServerConfig, ValidationResult, ValidationSummary, ValidationProgress, ValidationRunConfig, CategorySummary, DiscoveredSchemaAttribute } from '../../models/interfaces';
+import { ValidationResult, ValidationSummary, ValidationProgress, ValidationRunConfig, CategorySummary, DiscoveredSchemaAttribute } from '../../models/interfaces';
 
 interface CategoryToggle {
   key: string;
@@ -42,9 +42,9 @@ export class ValidationComponent implements OnInit, OnDestroy {
   readonly serverConfigService = inject(ServerConfigService);
   private notificationService = inject(NotificationService);
 
-  // Inline server selector
-  showQuickConnect = signal(false);
-  quickConnect = signal({ name: '', base_url: '', auth_type: 'bearer' as 'bearer' | 'basic' | 'apikey', auth_token: '' });
+  // Joining property configuration (like Microsoft SCIM Validator)
+  userJoiningProperty = signal('userName');
+  groupJoiningProperty = signal('displayName');
 
   categories = signal<CategoryToggle[]>([
     { key: 'schema_discovery', label: 'Schema Discovery', enabled: true },
@@ -52,6 +52,9 @@ export class ValidationComponent implements OnInit, OnDestroy {
     { key: 'groups_crud', label: 'Groups CRUD', enabled: true },
     { key: 'patch_operations', label: 'PATCH Operations', enabled: true },
     { key: 'filtering_pagination', label: 'Filtering & Pagination', enabled: true },
+    { key: 'duplicate_detection', label: 'Duplicate Detection (409)', enabled: true },
+    { key: 'soft_delete', label: 'Soft Delete (active=false)', enabled: true },
+    { key: 'group_operations', label: 'Group PATCH & Membership', enabled: true },
     { key: 'field_mapping', label: 'Field Mapping Rules', enabled: true },
     { key: 'custom_schema', label: 'Custom Schema Properties', enabled: true }
   ]);
@@ -76,36 +79,6 @@ export class ValidationComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await this.serverConfigService.loadConfigs();
-  }
-
-  onServerChange(configId: string) {
-    this.serverConfigService.selectConfig(configId);
-  }
-
-  toggleQuickConnect() {
-    this.showQuickConnect.update(v => !v);
-  }
-
-  async saveQuickConnect() {
-    const qc = this.quickConnect();
-    if (!qc.name || !qc.base_url) {
-      this.notificationService.error('Name and Base URL are required.');
-      return;
-    }
-    try {
-      const saved = await this.serverConfigService.saveConfig({
-        name: qc.name,
-        base_url: qc.base_url,
-        auth_type: qc.auth_type,
-        auth_token: qc.auth_token || undefined
-      });
-      this.serverConfigService.selectConfig(saved.id);
-      this.showQuickConnect.set(false);
-      this.quickConnect.set({ name: '', base_url: '', auth_type: 'bearer', auth_token: '' });
-      this.notificationService.success('Server profile saved!');
-    } catch (err: any) {
-      this.notificationService.error('Failed to save: ' + (err?.message || err));
-    }
   }
 
   async ngOnDestroy() {
@@ -181,7 +154,12 @@ export class ValidationComponent implements OnInit, OnDestroy {
         this.progress.set(p);
       });
 
-      const runId = await this.tauriService.runValidation({ server_config_id: configId, categories: this.enabledCategories });
+      const runId = await this.tauriService.runValidation({
+        server_config_id: configId,
+        categories: this.enabledCategories,
+        user_joining_property: this.userJoiningProperty(),
+        group_joining_property: this.groupJoiningProperty()
+      });
       this.currentRunId.set(runId);
       this.notificationService.success('Validation completed!');
 

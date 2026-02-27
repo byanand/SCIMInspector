@@ -37,6 +37,8 @@ impl ValidationEngine {
         test_run_id: &str,
         categories: &[String],
         field_mapping_rules: &[FieldMappingRule],
+        user_joining_property: &str,
+        group_joining_property: &str,
     ) -> Vec<ValidationResult> {
         let mut results = Vec::new();
         let all_categories: Vec<&str> = categories.iter().map(|s| s.as_str()).collect();
@@ -57,6 +59,9 @@ impl ValidationEngine {
                 "groups_crud" => 6,
                 "patch_operations" => 4,
                 "filtering_pagination" => 4,
+                "duplicate_detection" => 4,
+                "soft_delete" => 3,
+                "group_operations" => 6,
                 "field_mapping" => field_mapping_rules.len().max(1),
                 "custom_schema" => Self::count_custom_schema_tests(&custom_attrs),
                 _ => 0,
@@ -71,16 +76,25 @@ impl ValidationEngine {
                     Self::test_schema_discovery(app, client, test_run_id, &mut completed, total_tests).await
                 }
                 "users_crud" => {
-                    Self::test_users_crud(app, client, test_run_id, &mut completed, total_tests).await
+                    Self::test_users_crud(app, client, test_run_id, user_joining_property, &mut completed, total_tests).await
                 }
                 "groups_crud" => {
-                    Self::test_groups_crud(app, client, test_run_id, &mut completed, total_tests).await
+                    Self::test_groups_crud(app, client, test_run_id, group_joining_property, &mut completed, total_tests).await
                 }
                 "patch_operations" => {
-                    Self::test_patch_operations(app, client, test_run_id, &mut completed, total_tests).await
+                    Self::test_patch_operations(app, client, test_run_id, user_joining_property, &mut completed, total_tests).await
                 }
                 "filtering_pagination" => {
                     Self::test_filtering_pagination(app, client, test_run_id, &mut completed, total_tests).await
+                }
+                "duplicate_detection" => {
+                    Self::test_duplicate_detection(app, client, test_run_id, user_joining_property, group_joining_property, &mut completed, total_tests).await
+                }
+                "soft_delete" => {
+                    Self::test_soft_delete(app, client, test_run_id, user_joining_property, &mut completed, total_tests).await
+                }
+                "group_operations" => {
+                    Self::test_group_operations(app, client, test_run_id, group_joining_property, &mut completed, total_tests).await
                 }
                 "field_mapping" => {
                     Self::test_field_mapping(app, client, test_run_id, field_mapping_rules, &mut completed, total_tests).await
@@ -361,6 +375,7 @@ impl ValidationEngine {
         app: &AppHandle,
         client: &ScimClient,
         test_run_id: &str,
+        joining_property: &str,
         completed: &mut usize,
         total: usize,
     ) -> Vec<ValidationResult> {
@@ -426,49 +441,60 @@ impl ValidationEngine {
         }
         *completed += 1;
 
-        // Test 2: READ User (GET /Users/{id})
-        let test_name = "GET /Users/{id} - Read Test User";
+        // Test 2: Verify creation via filter on joining property (like Microsoft validator)
+        let test_name = "GET /Users?filter - Verify creation via joining property";
         Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
-        if let Some(ref user_id) = created_user_id {
-            let path = format!("/Users/{}", user_id);
-            match client.get(&path).await {
-                Ok(resp) => {
-                    let passed = resp.status == 200;
-                    let failure = if !passed {
-                        Some(format!("Expected status 200, got {}", resp.status))
-                    } else {
-                        match serde_json::from_str::<Value>(&resp.body) {
-                            Ok(json) => {
-                                if json.get("userName").and_then(|v| v.as_str()) != Some(&test_user_name) {
-                                    Some("Returned userName does not match created user".to_string())
-                                } else {
-                                    None
+        let filter_path = format!("/Users?filter={} eq \"{}\"", joining_property, test_user_name);
+        match client.get(&filter_path).await {
+            Ok(resp) => {
+                let mut passed = resp.status == 200;
+                let mut failure = None;
+                if !passed {
+                    failure = Some(format!("Expected status 200, got {}", resp.status));
+                } else {
+                    match serde_json::from_str::<Value>(&resp.body) {
+                        Ok(json) => {
+                            let total_results = json.get("totalResults").and_then(|v| v.as_u64()).unwrap_or(0);
+                            if total_results == 0 {
+                                passed = false;
+                                failure = Some("GET with filter returned 0 results — newly created user not found".to_string());
+                            } else {
+                                // Verify attribute round-trip: check values match what was POSTed
+                                let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                                if let Some(arr) = resources {
+                                    if let Some(user) = arr.first() {
+                                        let returned_name = user.get("userName").and_then(|v| v.as_str());
+                                        if returned_name != Some(&test_user_name) {
+                                            passed = false;
+                                            failure = Some(format!(
+                                                "Returned userName '{}' does not match POSTed value '{}'",
+                                                returned_name.unwrap_or("null"), test_user_name
+                                            ));
+                                        }
+                                    }
                                 }
                             }
-                            Err(e) => Some(format!("Invalid JSON: {}", e)),
                         }
-                    };
-                    results.push(Self::make_result(
-                        test_run_id, test_name, category, "GET",
-                        &path, None,
-                        Some(resp.status as i32), Some(resp.body),
-                        resp.duration_ms, failure.is_none(), failure,
-                    ));
+                        Err(e) => {
+                            passed = false;
+                            failure = Some(format!("Invalid JSON: {}", e));
+                        }
+                    }
                 }
-                Err(e) => {
-                    results.push(Self::make_result(
-                        test_run_id, test_name, category, "GET",
-                        &path, None, None, None,
-                        0, false, Some(e),
-                    ));
-                }
+                results.push(Self::make_result(
+                    test_run_id, test_name, category, "GET",
+                    &filter_path, None,
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, passed, failure,
+                ));
             }
-        } else {
-            results.push(Self::make_result(
-                test_run_id, test_name, category, "GET",
-                "/Users/{id}", None, None, None,
-                0, false, Some("Skipped: user creation failed".to_string()),
-            ));
+            Err(e) => {
+                results.push(Self::make_result(
+                    test_run_id, test_name, category, "GET",
+                    &filter_path, None, None, None,
+                    0, false, Some(e),
+                ));
+            }
         }
         *completed += 1;
 
@@ -668,6 +694,7 @@ impl ValidationEngine {
         app: &AppHandle,
         client: &ScimClient,
         test_run_id: &str,
+        joining_property: &str,
         completed: &mut usize,
         total: usize,
     ) -> Vec<ValidationResult> {
@@ -719,29 +746,52 @@ impl ValidationEngine {
         }
         *completed += 1;
 
-        // Test 2: READ Group
-        let test_name = "GET /Groups/{id} - Read Test Group";
+        // Test 2: Verify creation via filter on joining property
+        let test_name = "GET /Groups?filter - Verify creation via joining property";
         Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
-        if let Some(ref group_id) = created_group_id {
-            let path = format!("/Groups/{}", group_id);
-            match client.get(&path).await {
-                Ok(resp) => {
-                    let passed = resp.status == 200;
-                    let failure = if !passed { Some(format!("Expected 200, got {}", resp.status)) } else { None };
-                    results.push(Self::make_result(
-                        test_run_id, test_name, category, "GET",
-                        &path, None, Some(resp.status as i32), Some(resp.body),
-                        resp.duration_ms, passed, failure,
-                    ));
+        let filter_path = format!("/Groups?filter={} eq \"{}\"", joining_property, test_group_name);
+        match client.get(&filter_path).await {
+            Ok(resp) => {
+                let mut passed = resp.status == 200;
+                let mut failure = None;
+                if !passed {
+                    failure = Some(format!("Expected 200, got {}", resp.status));
+                } else {
+                    match serde_json::from_str::<Value>(&resp.body) {
+                        Ok(json) => {
+                            let total_results = json.get("totalResults").and_then(|v| v.as_u64()).unwrap_or(0);
+                            if total_results == 0 {
+                                passed = false;
+                                failure = Some("GET with filter returned 0 results — newly created group not found".to_string());
+                            } else {
+                                let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                                if let Some(arr) = resources {
+                                    if let Some(group) = arr.first() {
+                                        let returned_name = group.get("displayName").and_then(|v| v.as_str());
+                                        if returned_name != Some(&test_group_name) {
+                                            passed = false;
+                                            failure = Some(format!(
+                                                "Returned displayName '{}' does not match POSTed value '{}'",
+                                                returned_name.unwrap_or("null"), test_group_name
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => { passed = false; failure = Some(format!("Invalid JSON: {}", e)); }
+                    }
                 }
-                Err(e) => {
-                    results.push(Self::make_result(
-                        test_run_id, test_name, category, "GET", &path, None, None, None, 0, false, Some(e),
-                    ));
-                }
+                results.push(Self::make_result(
+                    test_run_id, test_name, category, "GET",
+                    &filter_path, None, Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, passed, failure,
+                ));
             }
-        } else {
-            results.push(Self::make_result(test_run_id, test_name, category, "GET", "/Groups/{id}", None, None, None, 0, false, Some("Skipped: group creation failed".to_string())));
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                    &filter_path, None, None, None, 0, false, Some(e)));
+            }
         }
         *completed += 1;
 
@@ -846,6 +896,7 @@ impl ValidationEngine {
         app: &AppHandle,
         client: &ScimClient,
         test_run_id: &str,
+        joining_property: &str,
         completed: &mut usize,
         total: usize,
     ) -> Vec<ValidationResult> {
@@ -870,7 +921,7 @@ impl ValidationEngine {
             }
         }
 
-        // Test 1: PATCH Add attribute
+        // Test 1: PATCH Add attribute — then verify via filter
         let test_name = "PATCH /Users/{id} - Add attribute (title)";
         Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
         if let Some(ref user_id) = created_user_id {
@@ -881,8 +932,31 @@ impl ValidationEngine {
             }).to_string();
             match client.patch(&path, &patch_body).await {
                 Ok(resp) => {
-                    let passed = resp.status == 200;
-                    let failure = if !passed { Some(format!("Expected 200, got {}", resp.status)) } else { None };
+                    let mut passed = resp.status == 200;
+                    let mut failure = None;
+                    if !passed {
+                        failure = Some(format!("Expected 200, got {}", resp.status));
+                    } else {
+                        // Verify the attribute was actually persisted
+                        let filter_path = format!("/Users?filter={} eq \"{}\"", joining_property, test_user_name);
+                        if let Ok(get_resp) = client.get(&filter_path).await {
+                            if let Ok(json) = serde_json::from_str::<Value>(&get_resp.body) {
+                                let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                                if let Some(arr) = resources {
+                                    if let Some(user) = arr.first() {
+                                        let title = user.get("title").and_then(|v| v.as_str());
+                                        if title != Some("Engineer") {
+                                            passed = false;
+                                            failure = Some(format!(
+                                                "PATCH succeeded but GET shows title='{}' instead of 'Engineer'",
+                                                title.unwrap_or("null")
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     results.push(Self::make_result(test_run_id, test_name, category, "PATCH", &path, Some(patch_body), Some(resp.status as i32), Some(resp.body), resp.duration_ms, passed, failure));
                 }
                 Err(e) => {
@@ -894,7 +968,7 @@ impl ValidationEngine {
         }
         *completed += 1;
 
-        // Test 2: PATCH Replace attribute
+        // Test 2: PATCH Replace attribute — then verify via filter
         let test_name = "PATCH /Users/{id} - Replace attribute (displayName)";
         Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
         if let Some(ref user_id) = created_user_id {
@@ -905,8 +979,31 @@ impl ValidationEngine {
             }).to_string();
             match client.patch(&path, &patch_body).await {
                 Ok(resp) => {
-                    let passed = resp.status == 200;
-                    let failure = if !passed { Some(format!("Expected 200, got {}", resp.status)) } else { None };
+                    let mut passed = resp.status == 200;
+                    let mut failure = None;
+                    if !passed {
+                        failure = Some(format!("Expected 200, got {}", resp.status));
+                    } else {
+                        // Verify via GET
+                        let filter_path = format!("/Users?filter={} eq \"{}\"", joining_property, test_user_name);
+                        if let Ok(get_resp) = client.get(&filter_path).await {
+                            if let Ok(json) = serde_json::from_str::<Value>(&get_resp.body) {
+                                let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                                if let Some(arr) = resources {
+                                    if let Some(user) = arr.first() {
+                                        let disp = user.get("displayName").and_then(|v| v.as_str());
+                                        if disp != Some("Updated Patch User") {
+                                            passed = false;
+                                            failure = Some(format!(
+                                                "PATCH succeeded but GET shows displayName='{}' instead of 'Updated Patch User'",
+                                                disp.unwrap_or("null")
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     results.push(Self::make_result(test_run_id, test_name, category, "PATCH", &path, Some(patch_body), Some(resp.status as i32), Some(resp.body), resp.duration_ms, passed, failure));
                 }
                 Err(e) => {
@@ -1282,6 +1379,563 @@ impl ValidationEngine {
 
         *completed += 1;
         result
+    }
+
+    // ── Duplicate Detection Tests (like Microsoft SCIM Validator) ──
+
+    async fn test_duplicate_detection(
+        app: &AppHandle,
+        client: &ScimClient,
+        test_run_id: &str,
+        user_joining_property: &str,
+        group_joining_property: &str,
+        completed: &mut usize,
+        total: usize,
+    ) -> Vec<ValidationResult> {
+        let mut results = Vec::new();
+        let category = "duplicate_detection";
+
+        // ── User Duplicate Detection ──
+        let uid = Uuid::new_v4().to_string().split('-').next().unwrap().to_string();
+        let dup_user_name = format!("scim_dup_test_{}@test.example.com", uid);
+        let create_body = serde_json::json!({
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+            "userName": dup_user_name,
+            "name": { "givenName": "Dup", "familyName": "TestUser" },
+            "displayName": "Dup Test User",
+            "active": true
+        }).to_string();
+
+        // Test 1: First creation should succeed with 201
+        let test_name = "POST /Users - Create user (first, expect 201)";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        let mut first_user_id: Option<String> = None;
+        match client.post("/Users", &create_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 201;
+                let mut failure = if !passed { Some(format!("Expected 201, got {}", resp.status)) } else { None };
+                if passed {
+                    if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        first_user_id = json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if first_user_id.is_none() {
+                            failure = Some("Response missing 'id' field".to_string());
+                        }
+                    }
+                }
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, failure.is_none(), failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body.clone()), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Test 2: Second creation with same userName should return 409 Conflict
+        let test_name = "POST /Users - Create duplicate user (expect 409)";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        match client.post("/Users", &create_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 409;
+                let failure = if !passed {
+                    Some(format!("Expected 409 Conflict for duplicate {}, got {}", user_joining_property, resp.status))
+                } else { None };
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, passed, failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body.clone()), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Cleanup first user
+        if let Some(ref uid) = first_user_id {
+            let _ = client.delete(&format!("/Users/{}", uid)).await;
+        }
+
+        // ── Group Duplicate Detection ──
+        let dup_group_name = format!("scim_dup_group_{}", Uuid::new_v4().to_string().split('-').next().unwrap());
+        let group_body = serde_json::json!({
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+            "displayName": dup_group_name,
+            "members": []
+        }).to_string();
+
+        // Test 3: First group creation should succeed with 201
+        let test_name = "POST /Groups - Create group (first, expect 201)";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        let mut first_group_id: Option<String> = None;
+        match client.post("/Groups", &group_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 201;
+                let mut failure = if !passed { Some(format!("Expected 201, got {}", resp.status)) } else { None };
+                if passed {
+                    if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        first_group_id = json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if first_group_id.is_none() {
+                            failure = Some("Response missing 'id' field".to_string());
+                        }
+                    }
+                }
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(group_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, failure.is_none(), failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(group_body.clone()), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Test 4: Second group creation with same displayName should return 409
+        let test_name = "POST /Groups - Create duplicate group (expect 409)";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        match client.post("/Groups", &group_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 409;
+                let failure = if !passed {
+                    Some(format!("Expected 409 Conflict for duplicate {}, got {}", group_joining_property, resp.status))
+                } else { None };
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(group_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, passed, failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(group_body), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Cleanup first group
+        if let Some(ref gid) = first_group_id {
+            let _ = client.delete(&format!("/Groups/{}", gid)).await;
+        }
+
+        results
+    }
+
+    // ── Soft Delete (active=false) Tests — critical for Entra ID ──
+
+    async fn test_soft_delete(
+        app: &AppHandle,
+        client: &ScimClient,
+        test_run_id: &str,
+        joining_property: &str,
+        completed: &mut usize,
+        total: usize,
+    ) -> Vec<ValidationResult> {
+        let mut results = Vec::new();
+        let category = "soft_delete";
+        let uid = Uuid::new_v4().to_string().split('-').next().unwrap().to_string();
+        let test_user_name = format!("scim_softdel_test_{}@test.example.com", uid);
+        let mut created_user_id: Option<String> = None;
+
+        // Test 1: Create a user with active=true
+        let test_name = "POST /Users - Create user with active=true";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        let create_body = serde_json::json!({
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+            "userName": test_user_name,
+            "name": { "givenName": "SoftDel", "familyName": "TestUser" },
+            "displayName": "SoftDel Test User",
+            "active": true
+        }).to_string();
+
+        match client.post("/Users", &create_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 201;
+                let mut failure = if !passed { Some(format!("Expected 201, got {}", resp.status)) } else { None };
+                if passed {
+                    if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        created_user_id = json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if created_user_id.is_none() {
+                            failure = Some("Response missing 'id' field".to_string());
+                        }
+                    }
+                }
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, failure.is_none(), failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(create_body), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Test 2: PATCH active to false (soft delete / disable)
+        let test_name = "PATCH /Users/{id} - Set active=false (soft delete)";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if let Some(ref user_id) = created_user_id {
+            let path = format!("/Users/{}", user_id);
+            let patch_body = serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                "Operations": [{ "op": "replace", "path": "active", "value": false }]
+            }).to_string();
+            match client.patch(&path, &patch_body).await {
+                Ok(resp) => {
+                    let passed = resp.status == 200 || resp.status == 204;
+                    let failure = if !passed {
+                        Some(format!("Expected 200/204, got {}", resp.status))
+                    } else { None };
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body),
+                        Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body), None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                "/Users/{id}", None, None, None, 0, false,
+                Some("Skipped: user creation failed".to_string())));
+        }
+        *completed += 1;
+
+        // Test 3: Verify active=false via filter
+        let test_name = "GET /Users?filter - Verify active=false after soft delete";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if created_user_id.is_some() {
+            let filter_path = format!("/Users?filter={} eq \"{}\"", joining_property, test_user_name);
+            match client.get(&filter_path).await {
+                Ok(resp) => {
+                    let mut passed = resp.status == 200;
+                    let mut failure = None;
+                    if !passed {
+                        failure = Some(format!("Expected 200, got {}", resp.status));
+                    } else {
+                        match serde_json::from_str::<Value>(&resp.body) {
+                            Ok(json) => {
+                                let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                                match resources {
+                                    Some(arr) if !arr.is_empty() => {
+                                        if let Some(user) = arr.first() {
+                                            let active = user.get("active");
+                                            match active {
+                                                Some(Value::Bool(false)) => {} // pass
+                                                Some(Value::Bool(true)) => {
+                                                    passed = false;
+                                                    failure = Some("User's 'active' is still true after PATCH to false".to_string());
+                                                }
+                                                Some(other) => {
+                                                    passed = false;
+                                                    failure = Some(format!("User's 'active' has unexpected value: {}", other));
+                                                }
+                                                None => {
+                                                    passed = false;
+                                                    failure = Some("User response does not contain 'active' field".to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        passed = false;
+                                        failure = Some("Disabled user should still be returned on GET request (soft delete ≠ hard delete)".to_string());
+                                    }
+                                }
+                            }
+                            Err(e) => { passed = false; failure = Some(format!("Invalid JSON: {}", e)); }
+                        }
+                    }
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        &filter_path, None, Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        &format!("/Users?filter={} eq \"{}\"", joining_property, test_user_name),
+                        None, None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                "/Users?filter=...", None, None, None, 0, false,
+                Some("Skipped: user creation failed".to_string())));
+        }
+        *completed += 1;
+
+        // Cleanup
+        if let Some(ref user_id) = created_user_id {
+            let _ = client.delete(&format!("/Users/{}", user_id)).await;
+        }
+
+        results
+    }
+
+    // ── Group Operations Tests (PATCH attrs, membership, joining property update) ──
+
+    async fn test_group_operations(
+        app: &AppHandle,
+        client: &ScimClient,
+        test_run_id: &str,
+        joining_property: &str,
+        completed: &mut usize,
+        total: usize,
+    ) -> Vec<ValidationResult> {
+        let mut results = Vec::new();
+        let category = "group_operations";
+
+        // Create a group for testing
+        let group_name = format!("scim_grpops_{}", Uuid::new_v4().to_string().split('-').next().unwrap());
+        let mut created_group_id: Option<String> = None;
+
+        let create_body = serde_json::json!({
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+            "displayName": group_name,
+            "members": []
+        }).to_string();
+
+        // Test 1: Create group for operations
+        let test_name = "POST /Groups - Create group for PATCH tests";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        match client.post("/Groups", &create_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 201;
+                let mut failure = if !passed { Some(format!("Expected 201, got {}", resp.status)) } else { None };
+                if passed {
+                    if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        created_group_id = json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if created_group_id.is_none() { failure = Some("Response missing 'id'".to_string()); }
+                    }
+                }
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(create_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, failure.is_none(), failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Groups", Some(create_body), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Test 2: PATCH group displayName via replace
+        let updated_group_name = format!("{}_patched", group_name);
+        let test_name = "PATCH /Groups/{id} - Replace displayName";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if let Some(ref group_id) = created_group_id {
+            let path = format!("/Groups/{}", group_id);
+            let patch_body = serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                "Operations": [{ "op": "replace", "path": "displayName", "value": updated_group_name }]
+            }).to_string();
+            match client.patch(&path, &patch_body).await {
+                Ok(resp) => {
+                    let passed = resp.status == 200 || resp.status == 204;
+                    let failure = if !passed { Some(format!("Expected 200/204, got {}", resp.status)) } else { None };
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body), Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body), None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                "/Groups/{id}", None, None, None, 0, false,
+                Some("Skipped: group creation failed".to_string())));
+        }
+        *completed += 1;
+
+        // Test 3: Verify PATCH via filter on the updated name
+        let test_name = "GET /Groups?filter - Verify PATCH updated displayName";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if created_group_id.is_some() {
+            let filter_path = format!("/Groups?filter={} eq \"{}\"", joining_property, updated_group_name);
+            match client.get(&filter_path).await {
+                Ok(resp) => {
+                    let mut passed = resp.status == 200;
+                    let mut failure = None;
+                    if !passed {
+                        failure = Some(format!("Expected 200, got {}", resp.status));
+                    } else if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        let total_results = json.get("totalResults").and_then(|v| v.as_u64()).unwrap_or(0);
+                        if total_results == 0 {
+                            passed = false;
+                            failure = Some("PATCH'd group not found via filter on updated displayName".to_string());
+                        } else {
+                            let resources = Self::get_resources(&json).and_then(|v| v.as_array());
+                            if let Some(arr) = resources {
+                                if let Some(group) = arr.first() {
+                                    let dn = group.get("displayName").and_then(|v| v.as_str());
+                                    if dn != Some(&updated_group_name) {
+                                        passed = false;
+                                        failure = Some(format!(
+                                            "Returned displayName '{}' does not match PATCH'd value '{}'",
+                                            dn.unwrap_or("null"), updated_group_name
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        &filter_path, None, Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        "/Groups?filter=...", None, None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                "/Groups?filter=...", None, None, None, 0, false,
+                Some("Skipped: group creation failed".to_string())));
+        }
+        *completed += 1;
+
+        // Create a user to add as group member
+        let member_user_name = format!("scim_member_{}@test.example.com", Uuid::new_v4().to_string().split('-').next().unwrap());
+        let mut member_user_id: Option<String> = None;
+        let member_body = serde_json::json!({
+            "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+            "userName": member_user_name,
+            "name": { "givenName": "Member", "familyName": "TestUser" },
+            "displayName": "Member Test User",
+            "active": true
+        }).to_string();
+
+        // Test 4: Create user to be added as member
+        let test_name = "POST /Users - Create user for group membership";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        match client.post("/Users", &member_body).await {
+            Ok(resp) => {
+                let passed = resp.status == 201;
+                let mut failure = if !passed { Some(format!("Expected 201, got {}", resp.status)) } else { None };
+                if passed {
+                    if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        member_user_id = json.get("id").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if member_user_id.is_none() { failure = Some("Response missing 'id'".to_string()); }
+                    }
+                }
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(member_body.clone()),
+                    Some(resp.status as i32), Some(resp.body),
+                    resp.duration_ms, failure.is_none(), failure));
+            }
+            Err(e) => {
+                results.push(Self::make_result(test_run_id, test_name, category, "POST",
+                    "/Users", Some(member_body), None, None, 0, false, Some(e)));
+            }
+        }
+        *completed += 1;
+
+        // Test 5: PATCH group to add member
+        let test_name = "PATCH /Groups/{id} - Add member to group";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if let (Some(ref group_id), Some(ref user_id)) = (&created_group_id, &member_user_id) {
+            let path = format!("/Groups/{}", group_id);
+            let patch_body = serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                "Operations": [{
+                    "op": "add",
+                    "path": "members",
+                    "value": [{ "value": user_id }]
+                }]
+            }).to_string();
+            match client.patch(&path, &patch_body).await {
+                Ok(resp) => {
+                    let passed = resp.status == 200 || resp.status == 204;
+                    let failure = if !passed {
+                        Some(format!("Expected 200/204, got {}", resp.status))
+                    } else { None };
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body), Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                        &path, Some(patch_body), None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            let skip_reason = if created_group_id.is_none() {
+                "Skipped: group creation failed"
+            } else {
+                "Skipped: member user creation failed"
+            };
+            results.push(Self::make_result(test_run_id, test_name, category, "PATCH",
+                "/Groups/{id}", None, None, None, 0, false, Some(skip_reason.to_string())));
+        }
+        *completed += 1;
+
+        // Test 6: Verify member was added via GET
+        let test_name = "GET /Groups/{id} - Verify member was added";
+        Self::emit_progress(app, test_run_id, test_name, category, *completed, total);
+        if let (Some(ref group_id), Some(ref user_id)) = (&created_group_id, &member_user_id) {
+            let path = format!("/Groups/{}", group_id);
+            match client.get(&path).await {
+                Ok(resp) => {
+                    let mut passed = resp.status == 200;
+                    let mut failure = None;
+                    if !passed {
+                        failure = Some(format!("Expected 200, got {}", resp.status));
+                    } else if let Ok(json) = serde_json::from_str::<Value>(&resp.body) {
+                        let members = json.get("members").and_then(|v| v.as_array());
+                        match members {
+                            Some(arr) => {
+                                let has_member = arr.iter().any(|m| {
+                                    m.get("value").and_then(|v| v.as_str()) == Some(user_id)
+                                });
+                                if !has_member {
+                                    passed = false;
+                                    failure = Some(format!(
+                                        "Group members array does not contain user '{}' after PATCH add",
+                                        user_id
+                                    ));
+                                }
+                            }
+                            None => {
+                                passed = false;
+                                failure = Some("Group response does not contain 'members' array".to_string());
+                            }
+                        }
+                    }
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        &path, None, Some(resp.status as i32), Some(resp.body),
+                        resp.duration_ms, passed, failure));
+                }
+                Err(e) => {
+                    results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                        &path, None, None, None, 0, false, Some(e)));
+                }
+            }
+        } else {
+            results.push(Self::make_result(test_run_id, test_name, category, "GET",
+                "/Groups/{id}", None, None, None, 0, false,
+                Some("Skipped: group or member creation failed".to_string())));
+        }
+        *completed += 1;
+
+        // Cleanup
+        if let Some(ref gid) = created_group_id {
+            let _ = client.delete(&format!("/Groups/{}", gid)).await;
+        }
+        if let Some(ref uid) = member_user_id {
+            let _ = client.delete(&format!("/Users/{}", uid)).await;
+        }
+
+        results
     }
 
     pub fn compute_summary(results: &[ValidationResult]) -> ValidationSummary {

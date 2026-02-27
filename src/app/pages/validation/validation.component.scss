@@ -14,97 +14,6 @@
     }
   }
 
-  .server-selector-card {
-    margin-bottom: 28px;
-
-    mat-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .server-select-row {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-
-      .server-select-field {
-        flex: 1;
-        max-width: 480px;
-      }
-
-      .selected-server-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-
-        .server-badge {
-          background: #1976d2;
-          color: #fff;
-          padding: 4px 12px;
-          border-radius: 12px;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-        }
-
-        .server-url {
-          font-family: monospace;
-          font-size: 13px;
-          color: rgba(0, 0, 0, 0.6);
-        }
-      }
-    }
-
-    .no-servers-prompt {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 32px 0;
-      gap: 12px;
-      color: rgba(0, 0, 0, 0.54);
-
-      mat-icon {
-        font-size: 40px;
-        height: 40px;
-        width: 40px;
-        opacity: 0.4;
-      }
-
-      p {
-        margin: 0;
-        font-size: 14px;
-      }
-    }
-
-    .quick-connect-form {
-      margin-top: 20px;
-      padding-top: 20px;
-
-      h3 {
-        margin: 12px 0 12px;
-        font-size: 15px;
-        font-weight: 500;
-      }
-
-      .quick-connect-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px 24px;
-
-        @media (max-width: 600px) {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .quick-connect-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 12px;
-      }
-    }
-  }
-
   .categories-card {
     margin-bottom: 28px;
 
@@ -116,6 +25,45 @@
       .toggle-all {
         display: flex;
         gap: 4px;
+      }
+    }
+
+    .joining-property-section {
+      margin-bottom: 16px;
+
+      .joining-property-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+
+        mat-icon {
+          font-size: 20px;
+          width: 20px;
+          height: 20px;
+          color: #1976d2;
+        }
+
+        .joining-property-label {
+          font-weight: 500;
+          font-size: 14px;
+        }
+
+        .joining-property-hint {
+          font-size: 12px;
+          color: rgba(0, 0, 0, 0.5);
+          font-style: italic;
+        }
+      }
+
+      .joining-property-grid {
+        display: flex;
+        gap: 24px;
+
+        mat-form-field {
+          flex: 1;
+          max-width: 280px;
+        }
       }
     }
 
@@ -469,16 +417,6 @@
 
 :host-context(.dark-theme) {
   .validation {
-    .server-selector-card {
-      .server-select-row .selected-server-info .server-url {
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      .no-servers-prompt {
-        color: rgba(255, 255, 255, 0.54);
-      }
-    }
-
     .progress-card .progress-info .progress-label {
       color: rgba(255, 255, 255, 0.7);
     }

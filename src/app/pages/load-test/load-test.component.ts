@@ -17,7 +17,7 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { ServerConfig, LoadTestConfig, LoadTestScenario, LoadTestSummary, LoadTestProgress, LoadTestResult } from '../../models/interfaces';
+import { LoadTestConfig, LoadTestScenario, LoadTestSummary, LoadTestProgress, LoadTestResult } from '../../models/interfaces';
 
 interface ScenarioInfo {
   id: LoadTestScenario;
@@ -44,15 +44,11 @@ export class LoadTestComponent implements OnInit, OnDestroy {
   readonly serverConfigService = inject(ServerConfigService);
   private notificationService = inject(NotificationService);
 
-  // Inline server selector
-  showQuickConnect = signal(false);
-  quickConnect = signal({ name: '', base_url: '', auth_type: 'bearer' as 'bearer' | 'basic' | 'apikey', auth_token: '' });
-
   // Config form
   totalRequests = signal(100);
   concurrency = signal(10);
   rampUpSeconds = signal(0);
-  selectedScenario = signal<LoadTestScenario>('create_users');
+  selectedScenarios = signal<Set<LoadTestScenario>>(new Set(['create_users']));
 
   scenarios: ScenarioInfo[] = [
     {
@@ -86,8 +82,43 @@ export class LoadTestComponent implements OnInit, OnDestroy {
       description: 'Paginated listing of users. Tests read throughput with varying startIndex.',
       operations: ['GET /Users?startIndex=N&count=10'],
       requestLabel: 'List requests'
-    }
+    },
+    {
+      id: 'create_groups',
+      name: 'Create Groups',
+      icon: 'group_add',
+      description: 'Create groups with auto-generated names, then clean up.',
+      operations: ['POST /Groups', 'DELETE /Groups/{id} (cleanup)'],
+      requestLabel: 'Groups to create'
+    },
+    {
+      id: 'group_lifecycle',
+      name: 'Group Lifecycle',
+      icon: 'sync',
+      description: 'Full CRUD per group: create, read, then delete.',
+      operations: ['POST /Groups', 'GET /Groups/{id}', 'DELETE /Groups/{id}'],
+      requestLabel: 'Group units (3 HTTP calls each)'
+    },
+    {
+      id: 'add_remove_members',
+      name: 'Add/Remove Members',
+      icon: 'group_add',
+      description: 'Create a group and users, then add/remove each user as a member.',
+      operations: ['POST /Groups', 'POST /Users', 'PATCH /Groups/{id} (add)', 'PATCH /Groups/{id} (remove)'],
+      requestLabel: 'Users to add/remove'
+    },
+    {
+      id: 'update_groups',
+      name: 'Update Groups',
+      icon: 'edit_note',
+      description: 'Create groups, then update each with PATCH. Tests group update throughput.',
+      operations: ['POST /Groups', 'PATCH /Groups/{id}', 'DELETE /Groups/{id} (cleanup)'],
+      requestLabel: 'Group units (2 HTTP calls each)'
+    },
   ];
+
+  userScenarios = this.scenarios.filter(s => ['create_users', 'create_update', 'full_lifecycle', 'list_users'].includes(s.id));
+  groupScenarios = this.scenarios.filter(s => ['create_groups', 'group_lifecycle', 'add_remove_members', 'update_groups'].includes(s.id));
 
   // State
   running = signal(false);
@@ -134,36 +165,6 @@ export class LoadTestComponent implements OnInit, OnDestroy {
     await this.serverConfigService.loadConfigs();
   }
 
-  onServerChange(configId: string) {
-    this.serverConfigService.selectConfig(configId);
-  }
-
-  toggleQuickConnect() {
-    this.showQuickConnect.update(v => !v);
-  }
-
-  async saveQuickConnect() {
-    const qc = this.quickConnect();
-    if (!qc.name || !qc.base_url) {
-      this.notificationService.error('Name and Base URL are required.');
-      return;
-    }
-    try {
-      const saved = await this.serverConfigService.saveConfig({
-        name: qc.name,
-        base_url: qc.base_url,
-        auth_type: qc.auth_type,
-        auth_token: qc.auth_token || undefined
-      });
-      this.serverConfigService.selectConfig(saved.id);
-      this.showQuickConnect.set(false);
-      this.quickConnect.set({ name: '', base_url: '', auth_type: 'bearer', auth_token: '' });
-      this.notificationService.success('Server profile saved!');
-    } catch (err: any) {
-      this.notificationService.error('Failed to save: ' + (err?.message || err));
-    }
-  }
-
   async ngOnDestroy() {
     if (this.unlistenProgress) {
       this.unlistenProgress();
@@ -171,11 +172,24 @@ export class LoadTestComponent implements OnInit, OnDestroy {
   }
 
   selectScenario(scenarioId: LoadTestScenario) {
-    this.selectedScenario.set(scenarioId);
+    this.selectedScenarios.update(set => {
+      const next = new Set(set);
+      if (next.has(scenarioId)) {
+        next.delete(scenarioId);
+      } else {
+        next.add(scenarioId);
+      }
+      return next;
+    });
+  }
+
+  isScenarioSelected(scenarioId: LoadTestScenario): boolean {
+    return this.selectedScenarios().has(scenarioId);
   }
 
   getSelectedScenarioInfo(): ScenarioInfo {
-    return this.scenarios.find(s => s.id === this.selectedScenario()) || this.scenarios[0];
+    const first = Array.from(this.selectedScenarios())[0];
+    return this.scenarios.find(s => s.id === first) || this.scenarios[0];
   }
 
   async startLoadTest() {
@@ -195,13 +209,15 @@ export class LoadTestComponent implements OnInit, OnDestroy {
         this.progress.set(p);
       });
 
+      const selectedArr = Array.from(this.selectedScenarios());
       const config: LoadTestConfig = {
         server_config_id: configId,
         total_requests: this.totalRequests(),
         concurrency: this.concurrency(),
         ramp_up_seconds: this.rampUpSeconds(),
         endpoints: [],
-        scenario: this.selectedScenario()
+        scenario: selectedArr[0] || 'create_users',
+        scenarios: selectedArr.length > 1 ? selectedArr : undefined
       };
 
       const runId = await this.tauriService.startLoadTest(config);

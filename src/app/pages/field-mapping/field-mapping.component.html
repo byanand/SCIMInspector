@@ -1,38 +1,4 @@
 <div class="field-mapping">
-  <div class="header">
-    <div>
-      <h1>Field Mapping</h1>
-      <p class="subtitle">Define which SCIM attributes are required and what format they must follow during validation.</p>
-    </div>
-  </div>
-
-  <!-- Server Selector -->
-  <mat-card class="server-selector-card">
-    <mat-card-header>
-      <mat-card-title>Server Profile</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      @if (serverConfigService.serverConfigs().length > 0) {
-        <mat-form-field appearance="outline" class="server-select-field">
-          <mat-label>Select Server Profile</mat-label>
-          <mat-select [ngModel]="serverConfigService.getSelectedId()" (ngModelChange)="onServerChange($event)">
-            @for (config of serverConfigService.serverConfigs(); track config.id) {
-              <mat-option [value]="config.id">
-                {{ config.name }} — {{ config.base_url }}
-              </mat-option>
-            }
-          </mat-select>
-          <mat-hint>Rules are saved per server profile</mat-hint>
-        </mat-form-field>
-      } @else {
-        <div class="no-servers-prompt">
-          <mat-icon>dns</mat-icon>
-          <p>No server profiles configured. Go to <strong>Server Config</strong> to add one.</p>
-        </div>
-      }
-    </mat-card-content>
-  </mat-card>
-
   @if (serverConfigService.getSelectedId()) {
     <!-- Quick Add from Presets -->
     <mat-card class="presets-card">

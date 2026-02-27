@@ -16,7 +16,65 @@
 
   <mat-sidenav-content class="app-content">
     <mat-toolbar class="app-toolbar">
+      <span class="toolbar-page-title">{{ currentPageTitle() }}</span>
       <span class="toolbar-spacer"></span>
+
+      <!-- Global Server Selector + Schema Status -->
+      <div class="toolbar-server-selector"
+        [matTooltip]="(serverConfigService.selectedConfig()?.base_url) ?? ''"
+        matTooltipPosition="below">
+        @if (serverConfigService.serverConfigs().length > 0) {
+          <mat-icon class="server-icon">storage</mat-icon>
+          <mat-select
+            [ngModel]="serverConfigService.getSelectedId()"
+            (ngModelChange)="onServerChange($event)"
+            placeholder="Select server"
+            class="server-select"
+            panelClass="toolbar-server-panel">
+            @for (config of serverConfigService.serverConfigs(); track config.id) {
+              <mat-option [value]="config.id">
+                {{ config.name }}
+              </mat-option>
+            }
+          </mat-select>
+
+          <!-- Schema status inline -->
+          @if (scimSchemaService.schemaStatus() !== 'idle') {
+            <span class="toolbar-divider"></span>
+            @switch (scimSchemaService.schemaStatus()) {
+              @case ('loading') {
+                <mat-spinner diameter="16" matTooltip="Loading schemas..."></mat-spinner>
+              }
+              @case ('loaded') {
+                <mat-icon
+                  class="schema-loaded-icon"
+                  [matTooltip]="'Schemas loaded (' + scimSchemaService.schemaCount() + ' schemas)'">
+                  check_circle
+                </mat-icon>
+              }
+              @case ('error') {
+                <mat-icon
+                  class="schema-error-icon"
+                  [matTooltip]="'Schema fetch failed: ' + scimSchemaService.errorMessage()">
+                  warning
+                </mat-icon>
+              }
+            }
+            <button mat-icon-button class="schema-refresh-btn"
+              (click)="refreshSchemas()"
+              matTooltip="Refresh schemas"
+              [disabled]="scimSchemaService.schemaStatus() === 'loading'">
+              <mat-icon>sync</mat-icon>
+            </button>
+          }
+        } @else {
+          <a routerLink="/server-config" class="no-server-link">
+            <mat-icon>add_circle_outline</mat-icon>
+            <span>Add Server</span>
+          </a>
+        }
+      </div>
+
       <button mat-icon-button (click)="toggleTheme()" matTooltip="Toggle theme">
         <mat-icon>{{ themeService.darkMode() ? 'light_mode' : 'dark_mode' }}</mat-icon>
       </button>

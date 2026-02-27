@@ -1,104 +1,17 @@
 <div class="load-test">
   <div class="header">
-    <h1>Load Testing</h1>
     <div class="header-actions">
       @if (running()) {
         <button mat-raised-button color="warn" (click)="stopLoadTest()">
           <mat-icon>stop</mat-icon> Stop Test
         </button>
       } @else {
-        <button mat-raised-button color="primary" (click)="startLoadTest()" [disabled]="!serverConfigService.selectedConfig()">
+        <button mat-raised-button color="primary" (click)="startLoadTest()" [disabled]="!serverConfigService.selectedConfig() || selectedScenarios().size === 0">
           <mat-icon>rocket_launch</mat-icon> Start Load Test
         </button>
       }
     </div>
   </div>
-
-  <!-- Server Selector -->
-  <mat-card class="server-selector-card">
-    <mat-card-header>
-      <mat-card-title>Target Server</mat-card-title>
-      <button mat-button color="primary" (click)="toggleQuickConnect()">
-        <mat-icon>{{ showQuickConnect() ? 'close' : 'add' }}</mat-icon>
-        {{ showQuickConnect() ? 'Cancel' : 'Quick Add' }}
-      </button>
-    </mat-card-header>
-    <mat-card-content>
-      @if (serverConfigService.serverConfigs().length > 0) {
-        <div class="server-select-row">
-          <mat-form-field appearance="outline" class="server-select-field">
-            <mat-label>Select Server Profile</mat-label>
-            <mat-select [ngModel]="serverConfigService.getSelectedId()" (ngModelChange)="onServerChange($event)">
-              @for (config of serverConfigService.serverConfigs(); track config.id) {
-                <mat-option [value]="config.id">
-                  {{ config.name }} — {{ config.base_url }}
-                </mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          @if (serverConfigService.selectedConfig(); as selected) {
-            <div class="selected-server-info">
-              <span class="server-badge">{{ selected.auth_type | uppercase }}</span>
-              <span class="server-url">{{ selected.base_url }}</span>
-            </div>
-          }
-        </div>
-      } @else if (!showQuickConnect()) {
-        <div class="no-servers-prompt">
-          <mat-icon>dns</mat-icon>
-          <p>No server profiles configured. Add one to get started.</p>
-          <button mat-stroked-button color="primary" (click)="toggleQuickConnect()">
-            <mat-icon>add</mat-icon> Add Server
-          </button>
-        </div>
-      }
-
-      @if (showQuickConnect()) {
-        <div class="quick-connect-form">
-          <mat-divider></mat-divider>
-          <h3>Quick Connect</h3>
-          <div class="quick-connect-grid">
-            <mat-form-field appearance="outline">
-              <mat-label>Profile Name</mat-label>
-              <input matInput [ngModel]="quickConnect().name"
-                (ngModelChange)="quickConnect.set({...quickConnect(), name: $event})"
-                placeholder="My SCIM Server">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Base URL</mat-label>
-              <input matInput [ngModel]="quickConnect().base_url"
-                (ngModelChange)="quickConnect.set({...quickConnect(), base_url: $event})"
-                placeholder="https://example.com/scim/v2">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Auth Type</mat-label>
-              <mat-select [ngModel]="quickConnect().auth_type"
-                (ngModelChange)="quickConnect.set({...quickConnect(), auth_type: $event})">
-                <mat-option value="bearer">Bearer Token</mat-option>
-                <mat-option value="basic">Basic Auth</mat-option>
-                <mat-option value="apikey">API Key</mat-option>
-              </mat-select>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Token / Credentials</mat-label>
-              <input matInput [ngModel]="quickConnect().auth_token"
-                (ngModelChange)="quickConnect.set({...quickConnect(), auth_token: $event})"
-                placeholder="Bearer token or API key">
-            </mat-form-field>
-          </div>
-          <div class="quick-connect-actions">
-            <button mat-raised-button color="primary" (click)="saveQuickConnect()">
-              <mat-icon>save</mat-icon> Save & Select
-            </button>
-            <button mat-button (click)="toggleQuickConnect()">Cancel</button>
-          </div>
-        </div>
-      }
-    </mat-card-content>
-  </mat-card>
 
   <!-- Configuration -->
   <mat-card class="config-card">
@@ -128,13 +41,39 @@
       <mat-divider></mat-divider>
 
       <div class="scenario-section">
-        <h3>Test Scenario</h3>
+        <h3>Test Scenarios <span class="selected-count">({{ selectedScenarios().size }} selected)</span></h3>
+
+        <h4 class="scenario-group-label"><mat-icon>person</mat-icon> User Scenarios</h4>
         <div class="scenario-cards">
-          @for (s of scenarios; track s.id) {
-            <div class="scenario-card" [class.selected]="selectedScenario() === s.id" (click)="selectScenario(s.id)">
+          @for (s of userScenarios; track s.id) {
+            <div class="scenario-card" [class.selected]="isScenarioSelected(s.id)" (click)="selectScenario(s.id)">
               <div class="scenario-card-header">
                 <mat-icon>{{ s.icon }}</mat-icon>
                 <span class="scenario-name">{{ s.name }}</span>
+                @if (isScenarioSelected(s.id)) {
+                  <mat-icon class="check-icon">check_circle</mat-icon>
+                }
+              </div>
+              <p class="scenario-desc">{{ s.description }}</p>
+              <div class="scenario-ops">
+                @for (op of s.operations; track op) {
+                  <span class="op-badge">{{ op }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        <h4 class="scenario-group-label"><mat-icon>group</mat-icon> Group Scenarios</h4>
+        <div class="scenario-cards">
+          @for (s of groupScenarios; track s.id) {
+            <div class="scenario-card" [class.selected]="isScenarioSelected(s.id)" (click)="selectScenario(s.id)">
+              <div class="scenario-card-header">
+                <mat-icon>{{ s.icon }}</mat-icon>
+                <span class="scenario-name">{{ s.name }}</span>
+                @if (isScenarioSelected(s.id)) {
+                  <mat-icon class="check-icon">check_circle</mat-icon>
+                }
               </div>
               <p class="scenario-desc">{{ s.description }}</p>
               <div class="scenario-ops">

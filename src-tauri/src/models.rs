@@ -73,7 +73,8 @@ pub struct CategorySummary {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadTestConfig {
     pub server_config_id: String,
-    pub scenario: Option<String>,  // "create_users", "create_update", "full_lifecycle", "list_users"
+    pub scenario: Option<String>,  // single scenario (legacy)
+    pub scenarios: Option<Vec<String>>,  // multi-scenario: run in parallel
     pub endpoints: Vec<LoadTestEndpoint>,
     pub total_requests: usize,
     pub concurrency: usize,
@@ -126,6 +127,8 @@ pub struct ValidationRunConfig {
     pub server_config_id: String,
     pub categories: Vec<String>,
     pub field_mapping_rules: Option<Vec<FieldMappingRule>>,
+    pub user_joining_property: Option<String>,   // e.g. "userName" (default)
+    pub group_joining_property: Option<String>,  // e.g. "displayName" (default)
 }
 
 // ── IPC Events ──
@@ -215,4 +218,18 @@ pub struct ExplorerResponse {
     pub body: String,
     pub duration_ms: i64,
     pub request_url: String,
+}
+
+// ── Sample Data ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SampleData {
+    pub id: String,
+    pub server_config_id: String,
+    pub resource_type: String,  // "user" or "group"
+    pub name: String,           // friendly label
+    pub data_json: String,      // the SCIM JSON body
+    pub is_default: bool,       // true = shipped with app
+    pub created_at: String,
+    pub updated_at: String,
 }

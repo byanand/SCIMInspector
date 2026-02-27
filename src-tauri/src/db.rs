@@ -105,6 +105,20 @@ impl Database {
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS sample_data (
+                id TEXT PRIMARY KEY,
+                server_config_id TEXT NOT NULL,
+                resource_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                data_json TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (server_config_id) REFERENCES server_configs(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sample_data_server ON sample_data(server_config_id);
             "
         )?;
         Ok(())
@@ -452,6 +466,127 @@ impl Database {
     pub fn delete_field_mapping_rules_for_server(&self, server_config_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM field_mapping_rules WHERE server_config_id = ?1", params![server_config_id])?;
+        Ok(())
+    }
+
+    // Sample Data CRUD
+    pub fn save_sample_data(&self, item: &super::models::SampleData) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO sample_data (id, server_config_id, resource_type, name, data_json, is_default, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                item.id,
+                item.server_config_id,
+                item.resource_type,
+                item.name,
+                item.data_json,
+                item.is_default,
+                item.created_at,
+                item.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_sample_data(&self, server_config_id: &str) -> Result<Vec<super::models::SampleData>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, server_config_id, resource_type, name, data_json, is_default, created_at, updated_at FROM sample_data WHERE server_config_id = ?1 ORDER BY resource_type, name ASC"
+        )?;
+        let items = stmt.query_map(params![server_config_id], |row| {
+            Ok(super::models::SampleData {
+                id: row.get(0)?,
+                server_config_id: row.get(1)?,
+                resource_type: row.get(2)?,
+                name: row.get(3)?,
+                data_json: row.get(4)?,
+                is_default: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })?.collect::<Result<Vec<_>>>()?;
+        Ok(items)
+    }
+
+    pub fn delete_sample_data(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM sample_data WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn delete_sample_data_for_server(&self, server_config_id: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM sample_data WHERE server_config_id = ?1", params![server_config_id])?;
+        Ok(())
+    }
+
+    pub fn get_sample_data_count(&self, server_config_id: &str) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM sample_data WHERE server_config_id = ?1",
+            params![server_config_id],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn seed_default_sample_data(&self, server_config_id: &str) -> Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+
+        let defaults = vec![
+            ("user", "Standard User", serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+                "userName": "jane.smith@example.com",
+                "name": { "givenName": "Jane", "familyName": "Smith", "formatted": "Jane Smith" },
+                "displayName": "Jane Smith",
+                "emails": [{ "value": "jane.smith@example.com", "type": "work", "primary": true }],
+                "phoneNumbers": [{ "value": "+1-555-0101", "type": "work" }],
+                "title": "Software Engineer",
+                "active": true
+            })),
+            ("user", "Admin User", serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+                "userName": "admin@example.com",
+                "name": { "givenName": "Admin", "familyName": "User", "formatted": "Admin User" },
+                "displayName": "Admin User",
+                "emails": [{ "value": "admin@example.com", "type": "work", "primary": true }],
+                "title": "System Administrator",
+                "active": true
+            })),
+            ("user", "Contractor", serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+                "userName": "contractor@external.com",
+                "name": { "givenName": "Alex", "familyName": "Contractor" },
+                "displayName": "Alex Contractor",
+                "emails": [{ "value": "contractor@external.com", "type": "work", "primary": true }],
+                "title": "External Contractor",
+                "active": true
+            })),
+            ("group", "Engineering Team", serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+                "displayName": "Engineering Team",
+                "members": []
+            })),
+            ("group", "Marketing Team", serde_json::json!({
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+                "displayName": "Marketing Team",
+                "members": []
+            })),
+        ];
+
+        for (rtype, name, json_val) in defaults {
+            let item = super::models::SampleData {
+                id: uuid::Uuid::new_v4().to_string(),
+                server_config_id: server_config_id.to_string(),
+                resource_type: rtype.to_string(),
+                name: name.to_string(),
+                data_json: serde_json::to_string_pretty(&json_val).unwrap_or_default(),
+                is_default: true,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+            };
+            self.save_sample_data(&item)?;
+        }
         Ok(())
     }
 }
