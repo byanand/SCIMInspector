@@ -17,7 +17,7 @@ import { MatInputModule } from '@angular/material/input';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { ValidationResult, ValidationSummary, ValidationProgress, ValidationRunConfig, CategorySummary, DiscoveredSchemaAttribute } from '../../models/interfaces';
+import { ValidationResult, ValidationSummary, ValidationProgress, ValidationRunConfig, CategorySummary, DiscoveredSchemaAttribute, ExportRequest } from '../../models/interfaces';
 
 interface CategoryToggle {
   key: string;
@@ -60,12 +60,35 @@ export class ValidationComponent implements OnInit, OnDestroy {
   ]);
 
   running = signal(false);
+  stopping = signal(false);
   progress = signal<ValidationProgress | null>(null);
   results = signal<ValidationResult[]>([]);
   summary = signal<ValidationSummary | null>(null);
   currentRunId = signal<string | null>(null);
   displayedColumns = ['status', 'category', 'test_name', 'duration_ms', 'message'];
   private unlistenProgress: (() => void) | null = null;
+
+  // Result filtering & search
+  resultFilter = signal<'all' | 'pass' | 'fail'>('all');
+  searchQuery = signal('');
+  failCount = computed(() => this.results().filter(r => !r.passed).length);
+  groupedResults = computed(() => {
+    const filter = this.resultFilter();
+    const q = this.searchQuery().toLowerCase().trim();
+    const filtered = this.results().filter(r => {
+      if (filter === 'pass' && !r.passed) return false;
+      if (filter === 'fail' && r.passed) return false;
+      if (q && !r.test_name.toLowerCase().includes(q) && !r.category.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const map = new Map<string, ValidationResult[]>();
+    for (const r of filtered) {
+      if (!map.has(r.category)) map.set(r.category, []);
+      map.get(r.category)!.push(r);
+    }
+    return map;
+  });
+  sortedGroupKeys = computed(() => Array.from(this.groupedResults().keys()));
 
   // Custom schema discovery
   discoveredAttrs = signal<DiscoveredSchemaAttribute[]>([]);
@@ -147,6 +170,8 @@ export class ValidationComponent implements OnInit, OnDestroy {
     this.running.set(true);
     this.results.set([]);
     this.summary.set(null);
+    this.resultFilter.set('all');
+    this.searchQuery.set('');
     this.progress.set({ test_run_id: '', current_test: 'Starting...', current_category: '', completed: 0, total: 0 });
 
     try {
@@ -168,13 +193,67 @@ export class ValidationComponent implements OnInit, OnDestroy {
       this.results.set(loadedResults);
       this.summary.set(this.computeValidationSummary(loadedResults));
     } catch (err: any) {
-      this.notificationService.error('Validation failed: ' + (err?.message || err));
+      const msg = (err?.message || String(err));
+      if (msg.toLowerCase().includes('cancel')) {
+        this.notificationService.info('Validation cancelled.');
+      } else {
+        this.notificationService.error('Validation failed: ' + msg);
+      }
     } finally {
       this.running.set(false);
       if (this.unlistenProgress) {
         this.unlistenProgress();
         this.unlistenProgress = null;
       }
+    }
+  }
+
+  async stopValidation() {
+    const runId = this.currentRunId();
+    if (!runId) return;
+    this.stopping.set(true);
+    try {
+      await this.tauriService.stopValidation(runId);
+    } catch { /* already done is fine */ }
+    finally { this.stopping.set(false); }
+  }
+
+  async exportResults() {
+    const runId = this.currentRunId();
+    if (!runId) return;
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+
+      // Ask user which format they want via the save-dialog filter selection
+      const outputPath = await save({
+        defaultPath: 'validation-report.xlsx',
+        filters: [
+          { name: 'Excel Workbook (2 sheets + charts)', extensions: ['xlsx'] },
+          { name: 'HTML Report (print to PDF)', extensions: ['html'] },
+          { name: 'CSV',  extensions: ['csv']  },
+          { name: 'JSON', extensions: ['json'] },
+        ],
+      });
+      if (!outputPath) return;
+
+      const ext = outputPath.split('.').pop()?.toLowerCase() ?? 'xlsx';
+      const format = ext === 'xlsx' ? 'excel'
+                   : ext === 'html' ? 'pdf'
+                   : ext === 'csv'  ? 'csv'
+                   : 'json';
+
+      const request: ExportRequest = { test_run_id: runId, format, output_path: outputPath };
+      await this.tauriService.exportReport(request);
+
+      if (format === 'excel') {
+        this.notificationService.success('Excel report exported and opened!');
+      } else if (format === 'pdf') {
+        this.notificationService.success('Report opened in browser. Use File \u2192 Print \u2192 Save as PDF.');
+      } else {
+        this.notificationService.success(`Report exported as ${ext.toUpperCase()}.`);
+      }
+    } catch (err: any) {
+      this.notificationService.error('Export failed: ' + (err?.message || err));
     }
   }
 
@@ -211,6 +290,14 @@ export class ValidationComponent implements OnInit, OnDestroy {
   }
 
   getCurlCommand(result: ValidationResult): string {
+    return this.buildCurl(result, false);
+  }
+
+  getCurlCommandDisplay(result: ValidationResult): string {
+    return this.buildCurl(result, true);
+  }
+
+  private buildCurl(result: ValidationResult, masked: boolean): string {
     const config = this.serverConfigService.selectedConfig();
     if (!config) return '';
 
@@ -220,26 +307,24 @@ export class ValidationComponent implements OnInit, OnDestroy {
     parts.push(`  -H 'Content-Type: application/scim+json'`);
     parts.push(`  -H 'Accept: application/scim+json'`);
 
-    // Auth header
     switch (config.auth_type) {
       case 'bearer':
         if (config.auth_token) {
-          parts.push(`  -H 'Authorization: Bearer ${config.auth_token}'`);
+          parts.push(`  -H 'Authorization: Bearer ${ masked ? '***' : config.auth_token }'`);
         }
         break;
       case 'basic':
         if (config.auth_username && config.auth_password) {
-          parts.push(`  -u '${config.auth_username}:${config.auth_password}'`);
+          parts.push(masked ? `  -u '***:***'` : `  -u '${config.auth_username}:${config.auth_password}'`);
         }
         break;
       case 'apikey':
         if (config.api_key_header && config.api_key_value) {
-          parts.push(`  -H '${config.api_key_header}: ${config.api_key_value}'`);
+          parts.push(`  -H '${config.api_key_header}: ${ masked ? '***' : config.api_key_value }'`);
         }
         break;
     }
 
-    // Request body
     if (result.request_body) {
       try {
         const pretty = JSON.stringify(JSON.parse(result.request_body), null, 2);
@@ -250,6 +335,18 @@ export class ValidationComponent implements OnInit, OnDestroy {
     }
 
     return parts.join(' \\\n');
+  }
+
+  getGroupResults(catKey: string): ValidationResult[] {
+    return this.groupedResults().get(catKey) ?? [];
+  }
+
+  getGroupFailCount(catKey: string): number {
+    return this.getGroupResults(catKey).filter(r => !r.passed).length;
+  }
+
+  getGroupPassCount(catKey: string): number {
+    return this.getGroupResults(catKey).filter(r => r.passed).length;
   }
 
   async copyCurl(result: ValidationResult) {

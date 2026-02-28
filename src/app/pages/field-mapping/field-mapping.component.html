@@ -23,54 +23,63 @@
         } @else {
           <p class="all-added-msg">All common attributes have been added. Use "Custom Attribute" for others.</p>
         }
+
+        <!-- From Server Schema — auto-populated from the global ScimSchemaService cache -->
+        <mat-divider class="schema-divider"></mat-divider>
+        <div class="server-schema-section">
+          <div class="server-schema-header">
+            <div class="server-schema-title">
+              <mat-icon>schema</mat-icon>
+              <span>From Server Schema</span>
+              @if (scimSchemaService.schemaStatus() === 'loaded') {
+                <span class="schema-count-badge">{{ scimSchemaService.schemaCount() }} schemas loaded</span>
+              }
+            </div>
+            <div class="server-schema-actions">
+              @if (scimSchemaService.schemaStatus() === 'loading') {
+                <mat-spinner diameter="18"></mat-spinner>
+              }
+              @if (scimSchemaService.schemaStatus() === 'loaded' || scimSchemaService.schemaStatus() === 'error') {
+                <button mat-icon-button (click)="scimSchemaService.refreshSchemas()" matTooltip="Refresh schemas from server">
+                  <mat-icon>refresh</mat-icon>
+                </button>
+              }
+              @if (availableDiscovered().length > 0) {
+                <button mat-stroked-button color="primary" (click)="addAllDiscovered()" [disabled]="loading()"
+                  matTooltip="Add all discovered attributes as rules">
+                  <mat-icon>playlist_add</mat-icon>
+                  Add All ({{ availableDiscovered().length }})
+                </button>
+              }
+            </div>
+          </div>
+
+          @if (scimSchemaService.schemaStatus() === 'idle') {
+            <p class="schema-hint">Select a server profile to load schema attributes automatically.</p>
+          } @else if (scimSchemaService.schemaStatus() === 'loading') {
+            <p class="schema-hint">Loading schemas from server...</p>
+          } @else if (scimSchemaService.schemaStatus() === 'error') {
+            <p class="schema-hint schema-error">Could not load schemas: {{ scimSchemaService.errorMessage() }}</p>
+          } @else if (availableDiscovered().length > 0) {
+            <div class="discovered-chips">
+              @for (attr of availableDiscovered(); track attr.schema_urn + attr.attr_name) {
+                <button mat-stroked-button class="discovered-chip"
+                  (click)="addFromDiscovered(attr)"
+                  [matTooltip]="attr.schema_name + ' — ' + attr.attr_type">
+                  <mat-icon class="disc-icon">schema</mat-icon>
+                  {{ discoveredDisplayName(attr) }}
+                  <span class="disc-type-badge">{{ attr.attr_type }}</span>
+                </button>
+              }
+            </div>
+          } @else {
+            <p class="all-added-msg">All schema attributes have been added as rules.</p>
+          }
+        </div>
       </mat-card-content>
     </mat-card>
 
-    <!-- Discover from Server -->
-    <mat-card class="schema-discovery-card">
-      <mat-card-header>
-        <mat-card-title>Discover from Server</mat-card-title>
-        <div class="schema-discovery-actions">
-          <button mat-raised-button color="primary"
-            (click)="loadSchemaAttributes()"
-            [disabled]="loadingSchema()">
-            @if (loadingSchema()) {
-              <mat-spinner diameter="18"></mat-spinner>
-            } @else {
-              <mat-icon>{{ schemaLoaded() ? 'refresh' : 'cloud_download' }}</mat-icon>
-            }
-            {{ schemaLoaded() ? 'Reload' : 'Load from Server' }}
-          </button>
-          @if (availableDiscovered().length > 0) {
-            <button mat-stroked-button color="primary" (click)="addAllDiscovered()"
-              [disabled]="loading()"
-              matTooltip="Add all discovered attributes as rules">
-              <mat-icon>playlist_add</mat-icon>
-              Add All ({{ availableDiscovered().length }})
-            </button>
-          }
-        </div>
-      </mat-card-header>
-      <mat-card-content>
-        @if (schemaLoaded() && availableDiscovered().length > 0) {
-          <div class="discovered-chips">
-            @for (attr of availableDiscovered(); track attr.schema_urn + attr.attr_name) {
-              <button mat-stroked-button class="discovered-chip"
-                (click)="addFromDiscovered(attr)"
-                [matTooltip]="attr.schema_name + ' — ' + attr.attr_type">
-                <mat-icon class="disc-icon">schema</mat-icon>
-                {{ discoveredDisplayName(attr) }}
-                <span class="disc-type-badge">{{ attr.attr_type }}</span>
-              </button>
-            }
-          </div>
-        } @else if (schemaLoaded() && availableDiscovered().length === 0 && discoveredAttributes().length > 0) {
-          <p class="all-added-msg">All discovered attributes have been added as rules.</p>
-        } @else if (!schemaLoaded()) {
-          <p class="schema-hint">Click "Load from Server" to fetch attributes from the SCIM /Schemas endpoint.</p>
-        }
-      </mat-card-content>
-    </mat-card>
+
 
     <!-- Editor Panel -->
     @if (editingRule()) {

@@ -98,6 +98,8 @@ export interface LoadTestSummary {
   max_latency_ms: number;
   avg_latency_ms: number;
   p50_latency_ms: number;
+  p75_latency_ms: number;
+  p90_latency_ms: number;
   p95_latency_ms: number;
   p99_latency_ms: number;
   requests_per_second: number;
@@ -140,7 +142,7 @@ export interface TestConnectionResult {
 
 export interface ExportRequest {
   test_run_id: string;
-  format: 'pdf' | 'csv' | 'json';
+  format: 'pdf' | 'csv' | 'json' | 'excel';
   output_path: string;
 }
 

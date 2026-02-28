@@ -15,6 +15,7 @@ use tokio::sync::Mutex as TokioMutex;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
@@ -33,6 +34,7 @@ pub fn run() {
             commands::delete_server_config,
             commands::test_connection,
             commands::run_validation,
+            commands::stop_validation,
             commands::get_validation_results,
             commands::start_load_test,
             commands::stop_load_test,

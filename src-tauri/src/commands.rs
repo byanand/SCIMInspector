@@ -122,7 +122,13 @@ pub async fn run_validation(
     let user_jp = config.user_joining_property.as_deref().unwrap_or("userName");
     let group_jp = config.group_joining_property.as_deref().unwrap_or("displayName");
 
-    let results = ValidationEngine::run(&app, &client, &test_run_id, &config.categories, &field_mapping_rules, user_jp, group_jp).await;
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    {
+        let mut flags = state.cancel_flags.lock().await;
+        flags.insert(test_run_id.clone(), cancel_flag.clone());
+    }
+
+    let results = ValidationEngine::run(&app, &client, &test_run_id, &config.categories, &field_mapping_rules, user_jp, group_jp, cancel_flag.clone()).await;
 
     // Save results
     for r in &results {
@@ -133,18 +139,38 @@ pub async fn run_validation(
     let summary = ValidationEngine::compute_summary(&results);
     let summary_json = serde_json::to_string(&summary).unwrap_or_default();
 
+    let status = if cancel_flag.load(Ordering::Relaxed) { "cancelled" } else { "completed" };
     let completed_run = TestRun {
         id: test_run_id.clone(),
         server_config_id: config.server_config_id,
         run_type: "validation".to_string(),
-        status: "completed".to_string(),
+        status: status.to_string(),
         started_at: test_run.started_at,
         completed_at: Some(Utc::now().to_rfc3339()),
         summary_json: Some(summary_json),
     };
     state.db.save_test_run(&completed_run).map_err(|e| e.to_string())?;
 
+    {
+        let mut flags = state.cancel_flags.lock().await;
+        flags.remove(&test_run_id);
+    }
+
     Ok(test_run_id)
+}
+
+#[tauri::command]
+pub async fn stop_validation(
+    state: State<'_, AppState>,
+    test_run_id: String,
+) -> Result<(), String> {
+    let flags = state.cancel_flags.lock().await;
+    if let Some(flag) = flags.get(&test_run_id) {
+        flag.store(true, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err("Validation run not found or already completed".to_string())
+    }
 }
 
 #[tauri::command]
@@ -277,6 +303,7 @@ pub async fn delete_test_run(
 
 #[tauri::command]
 pub async fn export_report(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     request: ExportRequest,
 ) -> Result<(), String> {
@@ -293,9 +320,10 @@ pub async fn export_report(
                 .unwrap_or_else(|| ValidationEngine::compute_summary(&results));
 
             match request.format.as_str() {
-                "json" => ExportEngine::export_validation_json(&results, &summary, &request.output_path),
-                "csv" => ExportEngine::export_validation_csv(&results, &request.output_path),
-                "pdf" => ExportEngine::export_validation_pdf(&results, &summary, &request.output_path),
+                "json"  => ExportEngine::export_validation_json(&results, &summary, &request.output_path),
+                "csv"   => ExportEngine::export_validation_csv(&results, &request.output_path),
+                "pdf"   => ExportEngine::export_validation_pdf(&results, &summary, &request.output_path),
+                "excel" => ExportEngine::export_validation_excel(&results, &summary, &request.output_path),
                 _ => Err("Unsupported format".to_string()),
             }
         }
@@ -308,14 +336,25 @@ pub async fn export_report(
                 .unwrap_or_else(|| LoadTestEngine::compute_summary(&results, total_duration));
 
             match request.format.as_str() {
-                "json" => ExportEngine::export_loadtest_json(&results, &summary, &request.output_path),
-                "csv" => ExportEngine::export_loadtest_csv(&results, &request.output_path),
-                "pdf" => ExportEngine::export_loadtest_pdf(&results, &summary, &request.output_path),
+                "json"  => ExportEngine::export_loadtest_json(&results, &summary, &request.output_path),
+                "csv"   => ExportEngine::export_loadtest_csv(&results, &request.output_path),
+                "pdf"   => ExportEngine::export_loadtest_pdf(&results, &summary, &request.output_path),
+                "excel" => ExportEngine::export_loadtest_excel(&results, &summary, &request.output_path),
                 _ => Err("Unsupported format".to_string()),
             }
         }
         _ => Err("Unknown test run type".to_string()),
+    }?;
+
+    // PDF → open in browser (user prints to PDF). Excel → open in default spreadsheet app.
+    if request.format == "pdf" || request.format == "excel" {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_path(&request.output_path, None::<&str>)
+            .map_err(|e| format!("Failed to open report: {}", e))?;
     }
+
+    Ok(())
 }
 
 // ── Utility Commands ──

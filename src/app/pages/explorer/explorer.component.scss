@@ -464,6 +464,7 @@
 .monaco-wrapper {
   flex: 1;
   min-height: 0;
+  position: relative;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
   overflow: hidden;
@@ -477,6 +478,25 @@
   ::ng-deep .editor-container {
     height: 100% !important;
     width: 100%;
+  }
+}
+
+.resource-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(var(--mat-sys-surface-rgb, 255 255 255) / 0.75);
+  backdrop-filter: blur(2px);
+  border-radius: 8px;
+
+  span {
+    font-size: 0.85rem;
+    opacity: 0.7;
   }
 }
 

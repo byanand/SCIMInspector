@@ -1,5 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { TauriService } from './tauri.service';
+import { DiscoveredSchemaAttribute } from '../models/interfaces';
 
 /**
  * Global singleton that manages SCIM schema fetching, caching, and
@@ -24,6 +25,36 @@ export class ScimSchemaService {
 
   // Raw SCIM schema objects from the server
   rawSchemas = signal<any[]>([]);
+
+  // Flattened attribute list derived from rawSchemas — used by Field Mapping screen
+  discoveredAttributes = computed<DiscoveredSchemaAttribute[]>(() => {
+    // Meta-schemas that don't contain mappable user/group attributes
+    const metaSchemas = new Set([
+      'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig',
+      'urn:ietf:params:scim:schemas:core:2.0:ResourceType',
+      'urn:ietf:params:scim:schemas:core:2.0:Schema',
+    ]);
+
+    const attrs: DiscoveredSchemaAttribute[] = [];
+    for (const schema of this.rawSchemas()) {
+      const urn: string = schema.id ?? '';
+      if (metaSchemas.has(urn)) continue;
+      const name: string = schema.name ?? urn;
+      // Some servers capitalize the key; handle both
+      const attrList: any[] = schema.attributes ?? schema.Attributes ?? [];
+      for (const attr of attrList) {
+        const attrName: string = attr.name ?? attr.Name ?? '';
+        if (!attrName) continue;
+        attrs.push({
+          schema_urn: urn,
+          schema_name: name,
+          attr_name: attrName,
+          attr_type: (attr.type ?? attr.Type ?? 'string') as string,
+        });
+      }
+    }
+    return attrs;
+  });
 
   // Tracks which server the schemas were loaded for
   private loadedForServerId = signal<string | null>(null);

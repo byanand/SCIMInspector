@@ -2,6 +2,8 @@ use chrono::Utc;
 use uuid::Uuid;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::models::*;
 use crate::scim_client::ScimClient;
@@ -39,6 +41,7 @@ impl ValidationEngine {
         field_mapping_rules: &[FieldMappingRule],
         user_joining_property: &str,
         group_joining_property: &str,
+        cancel_flag: Arc<AtomicBool>,
     ) -> Vec<ValidationResult> {
         let mut results = Vec::new();
         let all_categories: Vec<&str> = categories.iter().map(|s| s.as_str()).collect();
@@ -71,6 +74,9 @@ impl ValidationEngine {
         let mut completed = 0usize;
 
         for category in &all_categories {
+            if cancel_flag.load(Ordering::Relaxed) {
+                break;
+            }
             let cat_results = match *category {
                 "schema_discovery" => {
                     Self::test_schema_discovery(app, client, test_run_id, &mut completed, total_tests).await

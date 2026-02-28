@@ -15,6 +15,7 @@ import { MatTableModule } from '@angular/material/table';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
+import { ScimSchemaService } from '../../services/scim-schema.service';
 import { FieldMappingRule, FieldFormat, DiscoveredSchemaAttribute } from '../../models/interfaces';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -41,16 +42,12 @@ export class FieldMappingComponent implements OnInit {
   private tauriService = inject(TauriService);
   readonly serverConfigService = inject(ServerConfigService);
   private notificationService = inject(NotificationService);
+  readonly scimSchemaService = inject(ScimSchemaService);
 
   // State
   rules = signal<FieldMappingRule[]>([]);
   editingRule = signal<Partial<FieldMappingRule> | null>(null);
   loading = signal(false);
-
-  // Schema discovery state
-  discoveredAttributes = signal<DiscoveredSchemaAttribute[]>([]);
-  loadingSchema = signal(false);
-  schemaLoaded = signal(false);
 
   // Available format options
   formatOptions: { value: FieldFormat; label: string; description: string }[] = [
@@ -87,10 +84,16 @@ export class FieldMappingComponent implements OnInit {
     return this.scimPresets.filter(p => !existingAttrs.has(p.attribute));
   });
 
-  // Computed: discovered attributes not yet added as rules
+  // Computed: discovered attributes not yet added as rules, deduplicated by resolved path
   availableDiscovered = computed(() => {
     const existingAttrs = new Set(this.rules().map(r => r.scim_attribute));
-    return this.discoveredAttributes().filter(a => !existingAttrs.has(this.discoveredAttrPath(a)));
+    const seen = new Set<string>();
+    return this.scimSchemaService.discoveredAttributes().filter(a => {
+      const path = this.discoveredAttrPath(a);
+      if (existingAttrs.has(path) || seen.has(path)) return false;
+      seen.add(path);
+      return true;
+    });
   });
 
   displayedColumns = ['scim_attribute', 'display_name', 'required', 'format', 'actions'];
@@ -217,29 +220,6 @@ export class FieldMappingComponent implements OnInit {
       case 'datetime': return 'schedule';
       case 'regex': return 'code';
       default: return 'remove';
-    }
-  }
-
-  // ── Schema Discovery ──
-
-  async loadSchemaAttributes() {
-    const configId = this.serverConfigService.getSelectedId();
-    if (!configId) return;
-
-    this.loadingSchema.set(true);
-    try {
-      const attrs = await this.tauriService.discoverCustomSchema(configId);
-      this.discoveredAttributes.set(attrs);
-      this.schemaLoaded.set(true);
-      if (attrs.length === 0) {
-        this.notificationService.info('No attributes found in schema endpoint.');
-      } else {
-        this.notificationService.success(`Discovered ${attrs.length} attributes from server schemas.`);
-      }
-    } catch (err: any) {
-      this.notificationService.error('Schema discovery failed: ' + (err?.message || err));
-    } finally {
-      this.loadingSchema.set(false);
     }
   }
 

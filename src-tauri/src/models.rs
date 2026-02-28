@@ -114,6 +114,8 @@ pub struct LoadTestSummary {
     pub max_latency_ms: i64,
     pub avg_latency_ms: f64,
     pub p50_latency_ms: i64,
+    pub p75_latency_ms: i64,
+    pub p90_latency_ms: i64,
     pub p95_latency_ms: i64,
     pub p99_latency_ms: i64,
     pub requests_per_second: f64,

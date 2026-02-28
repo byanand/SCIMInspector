@@ -52,81 +52,100 @@
       font-style: italic;
       margin: 12px 0;
     }
-  }
 
-  .schema-discovery-card {
-    margin-bottom: 28px;
-    border-left: 4px solid #4caf50;
-
-    mat-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .schema-divider {
+      margin: 20px 0 16px;
     }
 
-    .schema-discovery-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
+    .server-schema-section {
+      .server-schema-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
 
-      mat-spinner {
-        display: inline-block;
-        margin-right: 6px;
-      }
-    }
+        .server-schema-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 500;
+          font-size: 14px;
 
-    .discovered-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      padding: 8px 0;
-    }
+          mat-icon {
+            font-size: 18px;
+            height: 18px;
+            width: 18px;
+            color: #1976d2;
+          }
 
-    .discovered-chip {
-      font-size: 13px;
-      border-radius: 20px;
-      border-color: rgba(76, 175, 80, 0.4);
+          .schema-count-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(25, 118, 210, 0.1);
+            color: #1976d2;
+          }
+        }
 
-      .disc-icon {
-        font-size: 16px;
-        height: 16px;
-        width: 16px;
-        margin-right: 4px;
-        vertical-align: middle;
-        color: #4caf50;
-      }
-
-      .disc-type-badge {
-        display: inline-block;
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-        padding: 1px 6px;
-        border-radius: 8px;
-        background: rgba(76, 175, 80, 0.12);
-        color: #388e3c;
-        margin-left: 6px;
+        .server-schema-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
       }
 
-      &:hover {
-        border-color: #4caf50;
-        background: rgba(76, 175, 80, 0.06);
+      .schema-hint {
+        color: rgba(0, 0, 0, 0.45);
+        font-size: 13px;
+        font-style: italic;
+        margin: 8px 0;
       }
-    }
 
-    .schema-hint {
-      color: rgba(0, 0, 0, 0.45);
-      font-size: 14px;
-      font-style: italic;
-      margin: 12px 0;
-    }
+      .schema-error {
+        color: #c62828;
+        font-style: normal;
+      }
 
-    .all-added-msg {
-      color: rgba(0, 0, 0, 0.45);
-      font-size: 14px;
-      font-style: italic;
-      margin: 12px 0;
+      .discovered-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 4px 0;
+      }
+
+      .discovered-chip {
+        font-size: 13px;
+        border-radius: 20px;
+        border-color: rgba(76, 175, 80, 0.4);
+
+        .disc-icon {
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+          margin-right: 4px;
+          vertical-align: middle;
+          color: #4caf50;
+        }
+
+        .disc-type-badge {
+          display: inline-block;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+          padding: 1px 6px;
+          border-radius: 8px;
+          background: rgba(76, 175, 80, 0.12);
+          color: #388e3c;
+          margin-left: 6px;
+        }
+
+        &:hover {
+          border-color: #4caf50;
+          background: rgba(76, 175, 80, 0.06);
+        }
+      }
     }
   }
 
@@ -265,15 +284,28 @@
       color: rgba(255, 255, 255, 0.45);
     }
 
-    .schema-discovery-card {
-      border-left-color: #388e3c;
+    .presets-card .server-schema-section {
+      .server-schema-title mat-icon {
+        color: #90caf9;
+      }
+
+      .schema-count-badge {
+        background: rgba(144, 202, 249, 0.15);
+        color: #90caf9;
+      }
+
+      .schema-hint {
+        color: rgba(255, 255, 255, 0.45);
+      }
+
+      .schema-error {
+        color: #ef9a9a;
+      }
 
       .discovered-chip {
         border-color: rgba(76, 175, 80, 0.3);
 
-        .disc-icon {
-          color: #81c784;
-        }
+        .disc-icon { color: #81c784; }
 
         .disc-type-badge {
           background: rgba(76, 175, 80, 0.15);
@@ -284,11 +316,6 @@
           border-color: #81c784;
           background: rgba(76, 175, 80, 0.1);
         }
-      }
-
-      .schema-hint,
-      .all-added-msg {
-        color: rgba(255, 255, 255, 0.45);
       }
     }
 

@@ -1,12 +1,14 @@
 <div class="validation">
   <div class="header">
     <button mat-raised-button color="primary" (click)="runValidation()" [disabled]="running() || !serverConfigService.selectedConfig()">
-      @if (running()) {
-        <ng-container><mat-icon>hourglass_empty</mat-icon> Running...</ng-container>
-      } @else {
-        <ng-container><mat-icon>play_arrow</mat-icon> Run Validation</ng-container>
-      }
+      <mat-icon>{{ running() ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
+      {{ running() ? 'Running...' : 'Run Validation' }}
     </button>
+    @if (running()) {
+      <button mat-stroked-button color="warn" (click)="stopValidation()" [disabled]="stopping()">
+        <mat-icon>stop</mat-icon> {{ stopping() ? 'Stopping...' : 'Stop' }}
+      </button>
+    }
   </div>
 
   <!-- Category Selection -->
@@ -109,14 +111,19 @@
     <mat-card class="progress-card">
       <mat-card-content>
         <div class="progress-info">
-          <span class="progress-label">{{ progress()?.current_test }}</span>
+          <div class="progress-text">
+            @if (progress()?.current_category) {
+              <span class="progress-category">{{ progress()?.current_category }}</span>
+            }
+            <span class="progress-label">{{ progress()?.current_test }}</span>
+          </div>
           <span class="progress-count">{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
         </div>
         <mat-progress-bar mode="determinate" [value]="getProgressPercent()"></mat-progress-bar>
       </mat-card-content>
     </mat-card>
   }
-
+</div>
   <!-- Summary -->
   @if (summary()) {
     <div class="summary-section">
@@ -145,11 +152,11 @@
         </mat-card-content>
       </mat-card>
 
-      <mat-card class="stat-card skip">
+      <mat-card class="stat-card duration">
         <mat-card-content>
-          <mat-icon>remove_circle</mat-icon>
-          <div class="stat-value">{{ summary()!.skipped }}</div>
-          <div class="stat-label">Skipped</div>
+          <mat-icon>timer</mat-icon>
+          <div class="stat-value">{{ summary()!.duration_ms < 1000 ? (summary()!.duration_ms | number:'1.0-0') + 'ms' : ((summary()!.duration_ms / 1000) | number:'1.1-1') + 's' }}</div>
+          <div class="stat-label">Duration</div>
         </mat-card-content>
       </mat-card>
     </div>
@@ -169,7 +176,7 @@
                      [style.background-color]="getScoreColor(cat.total > 0 ? (cat.passed / cat.total) * 100 : 0)">
                 </div>
               </div>
-              <span class="cat-score">{{ cat.passed }}/{{ cat.total }}</span>
+              <span class="cat-score">{{ cat.passed }}/{{ cat.total }} <span class="cat-pct">({{ cat.total > 0 ? ((cat.passed / cat.total) * 100 | number:'1.0-0') : 0 }}%)</span></span>
             </div>
           }
         </mat-card-content>
@@ -177,83 +184,129 @@
     }
   }
 
-  <!-- Results Table -->
   @if (results().length > 0) {
     <mat-card class="results-card">
       <mat-card-header>
-        <mat-card-title>Detailed Results</mat-card-title>
+        <mat-card-title>
+          Detailed Results
+          <span class="results-count">&mdash; {{ results().length }} tests</span>
+          @if (failCount() > 0) {
+            <span class="results-fail-badge">{{ failCount() }} failed</span>
+          }
+        </mat-card-title>
+        <button mat-stroked-button (click)="exportResults()" class="export-btn">
+          <mat-icon>download</mat-icon> Export
+        </button>
       </mat-card-header>
       <mat-card-content>
-        <mat-accordion>
-          @for (result of results(); track result.id) {
-            <mat-expansion-panel>
-              <mat-expansion-panel-header>
-                <mat-panel-title>
-                  <mat-icon [style.color]="getStatusColor(result.passed ? 'pass' : 'fail')">
-                    {{ getStatusIcon(result.passed ? 'pass' : 'fail') }}
-                  </mat-icon>
-                  <span class="test-name">{{ result.test_name }}</span>
-                </mat-panel-title>
-                <mat-panel-description>
-                  <span class="test-category">{{ result.category }}</span>
-                  <span class="test-duration">{{ result.duration_ms }}ms</span>
-                </mat-panel-description>
-              </mat-expansion-panel-header>
+        <!-- Search + Filter bar -->
+        <div class="filter-bar">
+          <mat-form-field appearance="outline" class="search-field">
+            <mat-label>Search</mat-label>
+            <input matInput [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Test name or category...">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+          <div class="filter-toggles">
+            <button mat-stroked-button [class.filter-active]="resultFilter() === 'all'" (click)="resultFilter.set('all')">
+              All ({{ results().length }})
+            </button>
+            <button mat-stroked-button [class.filter-active]="resultFilter() === 'fail'" class="filter-fail" (click)="resultFilter.set('fail')">
+              <mat-icon>cancel</mat-icon> Failed ({{ failCount() }})
+            </button>
+            <button mat-stroked-button [class.filter-active]="resultFilter() === 'pass'" class="filter-pass" (click)="resultFilter.set('pass')">
+              <mat-icon>check_circle</mat-icon> Passed ({{ results().length - failCount() }})
+            </button>
+          </div>
+        </div>
 
-              <div class="result-detail">
-                @if (result.failure_reason) {
-                  <div class="detail-row">
-                    <strong>Message:</strong>
-                    <span>{{ result.failure_reason }}</span>
-                  </div>
-                }
-                @if (result.response_status) {
-                  <div class="detail-row">
-                    <strong>HTTP Status:</strong>
-                    <span>{{ result.response_status }}</span>
-                  </div>
-                }
-                @if (result.url) {
-                  <div class="detail-row">
-                    <strong>Request URL:</strong>
-                    <code>{{ result.url }}</code>
-                  </div>
-                }
-                @if (result.http_method) {
-                  <div class="detail-row">
-                    <strong>Method:</strong>
-                    <span>{{ result.http_method }}</span>
-                  </div>
-                }
+        @if (sortedGroupKeys().length === 0) {
+          <div class="no-results-msg">
+            <mat-icon>search_off</mat-icon> No tests match your filter.
+          </div>
+        }
 
-                <!-- Curl Command -->
-                <div class="curl-section">
-                  <div class="curl-header">
-                    <strong>Curl Command:</strong>
-                    <button mat-icon-button (click)="copyCurl(result)" matTooltip="Copy curl">
-                      <mat-icon>content_copy</mat-icon>
-                    </button>
-                  </div>
-                  <pre class="curl-block">{{ getCurlCommand(result) }}</pre>
-                </div>
+        @for (catKey of sortedGroupKeys(); track catKey) {
+          <div class="result-group">
+            <div class="result-group-header">
+              <span class="rg-name">{{ catKey }}</span>
+              <span class="rg-stats">
+                <span class="rg-pass">{{ getGroupPassCount(catKey) }} pass</span>
+                @if (getGroupFailCount(catKey) > 0) {
+                  <span class="rg-fail">{{ getGroupFailCount(catKey) }} fail</span>
+                }
+              </span>
+            </div>
+            <mat-accordion>
+              @for (result of getGroupResults(catKey); track result.id) {
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      <mat-icon [style.color]="getStatusColor(result.passed ? 'pass' : 'fail')">
+                        {{ getStatusIcon(result.passed ? 'pass' : 'fail') }}
+                      </mat-icon>
+                      <span class="test-name">{{ result.test_name }}</span>
+                    </mat-panel-title>
+                    <mat-panel-description>
+                      <span class="test-duration">{{ result.duration_ms }}ms</span>
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
 
-                @if (result.request_body) {
-                  <div class="detail-row">
-                    <strong>Request Body:</strong>
-                    <pre class="response-body">{{ result.request_body }}</pre>
+                  <div class="result-detail">
+                    @if (result.failure_reason) {
+                      <div class="detail-row">
+                        <strong>Message:</strong>
+                        <span>{{ result.failure_reason }}</span>
+                      </div>
+                    }
+                    @if (result.response_status) {
+                      <div class="detail-row">
+                        <strong>HTTP Status:</strong>
+                        <span>{{ result.response_status }}</span>
+                      </div>
+                    }
+                    @if (result.url) {
+                      <div class="detail-row">
+                        <strong>Request URL:</strong>
+                        <code>{{ result.url }}</code>
+                      </div>
+                    }
+                    @if (result.http_method) {
+                      <div class="detail-row">
+                        <strong>Method:</strong>
+                        <span>{{ result.http_method }}</span>
+                      </div>
+                    }
+
+                    <!-- Curl Command (credentials masked) -->
+                    <div class="curl-section">
+                      <div class="curl-header">
+                        <strong>Curl Command:</strong>
+                        <span class="curl-masked-note"><mat-icon>lock</mat-icon> credentials masked &mdash;</span>
+                        <button mat-icon-button (click)="copyCurl(result)" matTooltip="Copy with real credentials">
+                          <mat-icon>content_copy</mat-icon>
+                        </button>
+                      </div>
+                      <pre class="curl-block">{{ getCurlCommandDisplay(result) }}</pre>
+                    </div>
+
+                    @if (result.request_body) {
+                      <div class="detail-row">
+                        <strong>Request Body:</strong>
+                        <pre class="response-body">{{ result.request_body }}</pre>
+                      </div>
+                    }
+                    @if (result.response_body) {
+                      <div class="detail-row">
+                        <strong>Response:</strong>
+                        <pre class="response-body">{{ result.response_body }}</pre>
+                      </div>
+                    }
                   </div>
-                }
-                @if (result.response_body) {
-                  <div class="detail-row">
-                    <strong>Response:</strong>
-                    <pre class="response-body">{{ result.response_body }}</pre>
-                  </div>
-                }
-              </div>
-            </mat-expansion-panel>
-          }
-        </mat-accordion>
+                </mat-expansion-panel>
+              }
+            </mat-accordion>
+          </div>
+        }
       </mat-card-content>
     </mat-card>
   }
-</div>

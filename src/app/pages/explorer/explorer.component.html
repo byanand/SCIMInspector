@@ -363,6 +363,12 @@
               </div>
             </div>
             <div class="monaco-wrapper">
+              @if (loadingResourceDetails()) {
+                <div class="resource-loading-overlay">
+                  <mat-spinner diameter="32"></mat-spinner>
+                  <span>Loading resource…</span>
+                </div>
+              }
               <ngx-monaco-editor
                 [options]="editorOptions()"
                 [ngModel]="requestBody()"

@@ -161,6 +161,11 @@ export class TauriService {
     throw new Error('Validation is not available in browser mode. Run the app with Tauri.');
   }
 
+  async stopValidation(testRunId: string): Promise<void> {
+    await this.ready;
+    if (isTauri()) return tauriInvoke!<void>('stop_validation', { testRunId });
+  }
+
   async getValidationResults(testRunId: string): Promise<ValidationResult[]> {
     await this.ready;
     if (isTauri()) return tauriInvoke!<ValidationResult[]>('get_validation_results', { testRunId });

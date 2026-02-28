@@ -319,7 +319,7 @@ export class LoadTestComponent implements OnInit, OnDestroy {
       return {
         total_requests: 0, successful: 0, failed: 0, error_rate: 0,
         total_duration_ms: 0, min_latency_ms: 0, max_latency_ms: 0,
-        avg_latency_ms: 0, p50_latency_ms: 0, p95_latency_ms: 0,
+        avg_latency_ms: 0, p50_latency_ms: 0, p75_latency_ms: 0, p90_latency_ms: 0, p95_latency_ms: 0,
         p99_latency_ms: 0, requests_per_second: 0, status_code_distribution: {}
       };
     }
@@ -334,6 +334,8 @@ export class LoadTestComponent implements OnInit, OnDestroy {
     const max_latency_ms = durations[durations.length - 1];
     const avg_latency_ms = total_duration_ms / total;
     const p50_latency_ms = durations[Math.floor(total * 0.5)];
+    const p75_latency_ms = durations[Math.floor(total * 0.75)];
+    const p90_latency_ms = durations[Math.floor(total * 0.90)];
     const p95_latency_ms = durations[Math.floor(total * 0.95)];
     const p99_latency_ms = durations[Math.min(Math.floor(total * 0.99), total - 1)];
 
@@ -350,7 +352,7 @@ export class LoadTestComponent implements OnInit, OnDestroy {
     return {
       total_requests: total, successful, failed, error_rate,
       total_duration_ms, min_latency_ms, max_latency_ms, avg_latency_ms,
-      p50_latency_ms, p95_latency_ms, p99_latency_ms,
+      p50_latency_ms, p75_latency_ms, p90_latency_ms, p95_latency_ms, p99_latency_ms,
       requests_per_second, status_code_distribution
     };
   }

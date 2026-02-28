@@ -1070,6 +1070,8 @@ impl LoadTestEngine {
         };
 
         let p50 = Self::percentile(&latencies, 50.0);
+        let p75 = Self::percentile(&latencies, 75.0);
+        let p90 = Self::percentile(&latencies, 90.0);
         let p95 = Self::percentile(&latencies, 95.0);
         let p99 = Self::percentile(&latencies, 99.0);
 
@@ -1096,6 +1098,8 @@ impl LoadTestEngine {
             max_latency_ms: max_latency,
             avg_latency_ms: avg_latency,
             p50_latency_ms: p50,
+            p75_latency_ms: p75,
+            p90_latency_ms: p90,
             p95_latency_ms: p95,
             p99_latency_ms: p99,
             requests_per_second: rps,

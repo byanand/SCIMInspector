@@ -365,6 +365,7 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   availableGroups = signal<{ id: string; displayName: string }[]>([]);
   fetchingUsers = signal(false);
   fetchingGroups = signal(false);
+  loadingResourceDetails = signal(false);
 
   // Custom field mappings
   fieldMappingRules = signal<FieldMappingRule[]>([]);
@@ -623,7 +624,44 @@ export class ExplorerComponent implements OnInit, OnDestroy {
     this.resourceId.set(id);
     const op = this.selectedOperation();
     if (op) {
-      this.requestPath.set(op.pathTemplate.replace('{id}', id || '{id}'));
+      const resolvedPath = op.pathTemplate.replace('{id}', id || '{id}');
+      this.requestPath.set(resolvedPath);
+      // Auto-load the live resource so the PUT body is pre-populated
+      if (op.method === 'PUT' && id) {
+        this.loadResourceForPut(resolvedPath);
+      }
+    }
+  }
+
+  private async loadResourceForPut(path: string): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+    this.loadingResourceDetails.set(true);
+    try {
+      const resp = await this.tauriService.executeScimRequest({
+        server_config_id: server.id,
+        method: 'GET',
+        path,
+      });
+      if (resp.status >= 200 && resp.status < 300) {
+        // Pretty-print the response body and place it in the editor
+        try {
+          this.requestBody.set(JSON.stringify(JSON.parse(resp.body), null, 2));
+        } catch {
+          this.requestBody.set(resp.body);
+        }
+        if (this.monacoEditor) {
+          setTimeout(() => this.applyEditorModel(), 0);
+        }
+      } else {
+        this.notificationService.error(
+          `Could not load resource details (HTTP ${resp.status}) — using template instead`
+        );
+      }
+    } catch {
+      this.notificationService.error('Could not load resource details — using template instead');
+    } finally {
+      this.loadingResourceDetails.set(false);
     }
   }
 
