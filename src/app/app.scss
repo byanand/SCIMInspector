@@ -4,7 +4,9 @@
 
 .app-sidenav {
   width: 240px;
-  background: var(--mat-sidenav-container-background-color);
+  // Opaque surface — without this the overlay (over-mode) drawer on narrow
+  // viewports is see-through and page content bleeds through behind it.
+  background: var(--mat-sys-surface-container, var(--mat-sys-surface, #fff));
 }
 
 .sidenav-header {
@@ -39,6 +41,26 @@
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+// Narrow viewports: tighten the toolbar so the hamburger, title and server
+// selector all fit without overflowing.
+@media (max-width: 600px) {
+  .app-toolbar {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .toolbar-server-selector {
+    padding-left: 8px;
+
+    .server-select {
+      min-width: 80px;
+    }
+  }
 }
 
 .toolbar-spacer {

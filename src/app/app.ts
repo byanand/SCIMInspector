@@ -1,5 +1,6 @@
 import { Component, OnInit, effect, inject, signal } from '@angular/core';
 import { Router, NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { filter } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -50,12 +51,24 @@ export class App implements OnInit {
 
   scimSchemaService = inject(ScimSchemaService);
   private router = inject(Router);
+  private breakpoints = inject(BreakpointObserver);
   currentPageTitle = signal('Dashboard');
+
+  // Below this width the sidenav becomes an overlay drawer toggled by the
+  // toolbar hamburger; at or above it the drawer is a permanent side panel.
+  isNarrow = signal(false);
+  sidenavOpened = signal(true);
 
   constructor(
     public themeService: ThemeService,
     public serverConfigService: ServerConfigService
   ) {
+    // Collapse the sidenav into an overlay on small viewports.
+    this.breakpoints.observe('(max-width: 960px)').subscribe((state) => {
+      this.isNarrow.set(state.matches);
+      this.sidenavOpened.set(!state.matches);
+    });
+
     // Track the active route to set the toolbar page title
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
@@ -82,6 +95,17 @@ export class App implements OnInit {
 
   toggleTheme(): void {
     this.themeService.toggle();
+  }
+
+  toggleSidenav(): void {
+    this.sidenavOpened.update((v) => !v);
+  }
+
+  // Close the overlay drawer after navigating on small viewports.
+  onNavClick(): void {
+    if (this.isNarrow()) {
+      this.sidenavOpened.set(false);
+    }
   }
 
   onServerChange(id: string): void {

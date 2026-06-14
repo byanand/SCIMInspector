@@ -1115,3 +1115,62 @@ impl LoadTestEngine {
         sorted[idx.min(sorted.len() - 1)]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percentile_handles_empty_and_bounds() {
+        assert_eq!(LoadTestEngine::percentile(&[], 50.0), 0);
+        let sorted = vec![10, 20, 30, 40, 50];
+        assert_eq!(LoadTestEngine::percentile(&sorted, 0.0), 10);
+        assert_eq!(LoadTestEngine::percentile(&sorted, 100.0), 50);
+        assert_eq!(LoadTestEngine::percentile(&sorted, 50.0), 30);
+    }
+
+    fn lt_result(status: Option<i32>, success: bool, duration_ms: i64) -> LoadTestResult {
+        LoadTestResult {
+            id: "id".into(),
+            test_run_id: "run".into(),
+            request_index: 0,
+            http_method: "POST".into(),
+            url: "/Users".into(),
+            request_body: None,
+            status_code: status,
+            duration_ms,
+            success,
+            error_message: None,
+            timestamp: "now".into(),
+        }
+    }
+
+    #[test]
+    fn summary_computes_rates_latency_and_distribution() {
+        let results = vec![
+            lt_result(Some(201), true, 100),
+            lt_result(Some(201), true, 200),
+            lt_result(Some(500), false, 300),
+            lt_result(None, false, 0),
+        ];
+        let s = LoadTestEngine::compute_summary(&results, 1000);
+        assert_eq!(s.total_requests, 4);
+        assert_eq!(s.successful, 2);
+        assert_eq!(s.failed, 2);
+        assert!((s.error_rate - 50.0).abs() < f64::EPSILON);
+        assert_eq!(s.min_latency_ms, 0);
+        assert_eq!(s.max_latency_ms, 300);
+        // 4 requests over 1000ms = 4 rps
+        assert!((s.requests_per_second - 4.0).abs() < f64::EPSILON);
+        assert_eq!(*s.status_code_distribution.get(&201).unwrap(), 2);
+        assert_eq!(*s.status_code_distribution.get(&500).unwrap(), 1);
+    }
+
+    #[test]
+    fn summary_empty_is_safe() {
+        let s = LoadTestEngine::compute_summary(&[], 0);
+        assert_eq!(s.total_requests, 0);
+        assert_eq!(s.error_rate, 0.0);
+        assert_eq!(s.requests_per_second, 0.0);
+    }
+}

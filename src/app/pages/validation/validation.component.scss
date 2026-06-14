@@ -58,10 +58,11 @@
 
       .joining-property-grid {
         display: flex;
+        flex-wrap: wrap;
         gap: 24px;
 
         mat-form-field {
-          flex: 1;
+          flex: 1 1 240px;
           max-width: 280px;
         }
       }
@@ -72,6 +73,16 @@
       grid-template-columns: repeat(5, 1fr);
       gap: 16px 0;
       padding: 12px 0;
+
+      @media (max-width: 1100px) {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      @media (max-width: 700px) {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      @media (max-width: 480px) {
+        grid-template-columns: 1fr;
+      }
     }
 
     .custom-schema-section {

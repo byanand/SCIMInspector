@@ -33,6 +33,7 @@ impl ValidationEngine {
 }
 
 impl ValidationEngine {
+    #[allow(clippy::too_many_arguments)]
     pub async fn run(
         app: &AppHandle,
         client: &ScimClient,
@@ -1960,7 +1961,14 @@ impl ValidationEngine {
         for r in results {
             let entry = category_map.entry(r.category.clone()).or_insert((0, 0, 0));
             entry.0 += 1;
-            if r.passed { entry.1 += 1; } else { entry.2 += 1; }
+            let is_skipped = r.failure_reason.as_ref().is_some_and(|f| f.starts_with("Skipped"));
+            if r.passed {
+                entry.1 += 1;
+            } else if !is_skipped {
+                // Skipped results are neither passed nor failed (consistent with
+                // the top-level summary counts).
+                entry.2 += 1;
+            }
         }
         let categories = category_map.into_iter().map(|(name, (t, p, f))| CategorySummary {
             name, total: t, passed: p, failed: f,
@@ -2200,4 +2208,129 @@ impl ValidationEngine {
 enum PathPart {
     Key(String),
     Index(String, usize),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result(category: &str, passed: bool, skipped: bool, duration_ms: i64) -> ValidationResult {
+        ValidationResult {
+            id: "id".into(),
+            test_run_id: "run".into(),
+            test_name: "test".into(),
+            category: category.into(),
+            http_method: "GET".into(),
+            url: "/Users".into(),
+            request_body: None,
+            response_status: Some(200),
+            response_body: None,
+            duration_ms,
+            passed,
+            failure_reason: if skipped {
+                Some("Skipped: nothing to do".into())
+            } else if !passed {
+                Some("boom".into())
+            } else {
+                None
+            },
+            executed_at: "now".into(),
+        }
+    }
+
+    #[test]
+    fn summary_separates_skipped_from_failed() {
+        let results = vec![
+            result("users_crud", true, false, 10),
+            result("users_crud", false, false, 20),
+            result("users_crud", false, true, 0), // skipped
+        ];
+        let s = ValidationEngine::compute_summary(&results);
+        assert_eq!(s.total, 3);
+        assert_eq!(s.passed, 1);
+        assert_eq!(s.failed, 1);
+        assert_eq!(s.skipped, 1);
+        // compliance is over non-skipped tests only: 1 / (3 - 1) = 50%
+        assert!((s.compliance_score - 50.0).abs() < f64::EPSILON);
+        assert_eq!(s.duration_ms, 30);
+
+        // The per-category rollup must not count the skipped test as failed.
+        let cat = s.categories.iter().find(|c| c.name == "users_crud").unwrap();
+        assert_eq!(cat.total, 3);
+        assert_eq!(cat.passed, 1);
+        assert_eq!(cat.failed, 1);
+    }
+
+    #[test]
+    fn summary_empty_is_zero_compliance() {
+        let s = ValidationEngine::compute_summary(&[]);
+        assert_eq!(s.total, 0);
+        assert_eq!(s.compliance_score, 0.0);
+    }
+
+    #[test]
+    fn custom_schema_test_count() {
+        assert_eq!(ValidationEngine::count_custom_schema_tests(&[]), 1);
+        let attrs = vec![
+            SchemaAttribute { schema_urn: "u".into(), schema_name: "n".into(), attr_name: "a".into(), attr_type: "boolean".into() },
+            SchemaAttribute { schema_urn: "u".into(), schema_name: "n".into(), attr_name: "b".into(), attr_type: "string".into() },
+        ];
+        // booleans * 2 + others = 1*2 + 1 = 3
+        assert_eq!(ValidationEngine::count_custom_schema_tests(&attrs), 3);
+    }
+
+    #[test]
+    fn resolve_nested_and_indexed_paths() {
+        let user = serde_json::json!({
+            "name": { "givenName": "Ada" },
+            "emails": [{ "value": "ada@example.com" }]
+        });
+        assert_eq!(
+            ValidationEngine::resolve_path(&user, "name.givenName").and_then(|v| v.as_str().map(String::from)),
+            Some("Ada".to_string())
+        );
+        assert_eq!(
+            ValidationEngine::resolve_path(&user, "emails[0].value").and_then(|v| v.as_str().map(String::from)),
+            Some("ada@example.com".to_string())
+        );
+        assert!(ValidationEngine::resolve_path(&user, "name.missing").is_none());
+        assert!(ValidationEngine::resolve_path(&user, "emails[5].value").is_none());
+    }
+
+    fn rule(attr: &str, required: bool, format: &str) -> FieldMappingRule {
+        FieldMappingRule {
+            id: "id".into(),
+            server_config_id: "srv".into(),
+            scim_attribute: attr.into(),
+            display_name: attr.into(),
+            required,
+            format: format.into(),
+            regex_pattern: None,
+            created_at: "now".into(),
+            updated_at: "now".into(),
+            description: None,
+        }
+    }
+
+    #[test]
+    fn field_rule_required_missing_fails() {
+        let user = serde_json::json!({ "userName": "ada" });
+        let (passed, reason) = ValidationEngine::validate_field_rule(&user, &rule("displayName", true, "none"));
+        assert!(!passed);
+        assert!(reason.unwrap().contains("missing"));
+    }
+
+    #[test]
+    fn field_rule_email_format() {
+        let ok = serde_json::json!({ "userName": "ada@example.com" });
+        let bad = serde_json::json!({ "userName": "not-an-email" });
+        assert!(ValidationEngine::validate_field_rule(&ok, &rule("userName", true, "email")).0);
+        assert!(!ValidationEngine::validate_field_rule(&bad, &rule("userName", true, "email")).0);
+    }
+
+    #[test]
+    fn field_rule_optional_absent_passes() {
+        let user = serde_json::json!({ "userName": "ada" });
+        assert!(ValidationEngine::validate_field_rule(&user, &rule("title", false, "none")).0);
+    }
 }

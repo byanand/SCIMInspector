@@ -13,6 +13,8 @@ pub struct ServerConfig {
     pub auth_password: Option<String>,
     pub api_key_header: Option<String>,
     pub api_key_value: Option<String>,
+    #[serde(default)]
+    pub allow_invalid_certs: bool, // opt-in: accept self-signed / invalid TLS certs
     pub created_at: String,
     pub updated_at: String,
 }

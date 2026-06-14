@@ -11,6 +11,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { ServerConfigService } from '../../services/server-config.service';
 import { TauriService } from '../../services/tauri.service';
 import { NotificationService } from '../../services/notification.service';
@@ -23,7 +24,7 @@ import { ServerConfig, TestConnectionResult } from '../../models';
     CommonModule, FormsModule,
     MatCardModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatIconModule, MatListModule, MatProgressSpinnerModule,
-    MatChipsModule, MatDividerModule,
+    MatChipsModule, MatDividerModule, MatSlideToggleModule,
   ],
   templateUrl: './server-config.component.html',
   styleUrl: './server-config.component.scss',
@@ -63,6 +64,7 @@ export class ServerConfigComponent implements OnInit {
       auth_password: '',
       api_key_header: '',
       api_key_value: '',
+      allow_invalid_certs: false,
     });
     this.editing.set(true);
     this.connectionResult.set(null);

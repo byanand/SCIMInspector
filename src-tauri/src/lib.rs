@@ -1,4 +1,5 @@
 pub mod models;
+pub mod secrets;
 pub mod db;
 pub mod scim_client;
 pub mod validation;

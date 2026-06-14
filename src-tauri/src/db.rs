@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use chrono;
 
+use crate::secrets;
+
 pub struct Database {
     conn: Mutex<Connection>,
 }
@@ -121,21 +123,93 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_sample_data_server ON sample_data(server_config_id);
             "
         )?;
+
+        // Columns added after the initial release. ALTER fails if the column
+        // already exists, so the error is ignored (idempotent migration).
+        let _ = conn.execute(
+            "ALTER TABLE server_configs ADD COLUMN allow_invalid_certs INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
         Ok(())
+    }
+
+    // ── Secret helpers (keychain-backed) ──
+
+    /// Persist a secret to the OS keychain. Returns the value to write into the
+    /// DB column: empty when the keychain accepted it, the original (plaintext)
+    /// value otherwise so the app still works without a keychain.
+    fn stash_secret(id: &str, field: &str, value: &Option<String>) -> Option<String> {
+        let account = format!("{}:{}", id, field);
+        match value {
+            Some(v) if !v.is_empty() => {
+                if secrets::set(&account, Some(v)) {
+                    Some(String::new())
+                } else {
+                    Some(v.clone())
+                }
+            }
+            _ => {
+                secrets::delete(&account);
+                value.clone()
+            }
+        }
+    }
+
+    /// Prefer a plaintext value still in the DB (legacy / keychain-unavailable
+    /// fallback); otherwise read the secret from the keychain.
+    fn load_secret(id: &str, field: &str, current: Option<String>) -> Option<String> {
+        match &current {
+            Some(s) if !s.is_empty() => current,
+            _ => secrets::get(&format!("{}:{}", id, field)).or(current),
+        }
+    }
+
+    fn hydrate_secrets(config: &mut super::models::ServerConfig) {
+        config.auth_token = Self::load_secret(&config.id, "auth_token", config.auth_token.take());
+        config.auth_password = Self::load_secret(&config.id, "auth_password", config.auth_password.take());
+        config.api_key_value = Self::load_secret(&config.id, "api_key_value", config.api_key_value.take());
+    }
+
+    fn purge_secrets(id: &str) {
+        for field in ["auth_token", "auth_password", "api_key_value"] {
+            secrets::delete(&format!("{}:{}", id, field));
+        }
     }
 
     // App Settings
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT value FROM app_settings WHERE key = ?1")?;
-        let mut rows = stmt.query_map(params![key], |row| row.get::<_, String>(0))?;
-        match rows.next() {
-            Some(val) => Ok(Some(val?)),
-            None => Ok(None),
+        let db_val: Option<String> = {
+            let mut stmt = conn.prepare("SELECT value FROM app_settings WHERE key = ?1")?;
+            let mut rows = stmt.query_map(params![key], |row| row.get::<_, String>(0))?;
+            match rows.next() {
+                Some(val) => Some(val?),
+                None => None,
+            }
+        };
+
+        // Sensitive settings live in the keychain. Prefer it, and migrate any
+        // legacy plaintext value found in the table.
+        if Self::is_secret_setting(key) {
+            if let Some(v) = secrets::get(key) {
+                return Ok(Some(v));
+            }
+            if let Some(ref v) = db_val {
+                if secrets::set(key, Some(v)) {
+                    let _ = conn.execute("DELETE FROM app_settings WHERE key = ?1", params![key]);
+                }
+            }
         }
+
+        Ok(db_val)
     }
 
     pub fn save_setting(&self, key: &str, value: &str) -> Result<()> {
+        if Self::is_secret_setting(key) {
+            secrets::set(key, Some(value));
+            return Ok(());
+        }
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
@@ -145,26 +219,41 @@ impl Database {
     }
 
     pub fn delete_setting(&self, key: &str) -> Result<()> {
+        if Self::is_secret_setting(key) {
+            secrets::delete(key);
+        }
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM app_settings WHERE key = ?1", params![key])?;
         Ok(())
     }
 
+    /// Settings whose values are credentials and must not be stored in plaintext.
+    fn is_secret_setting(key: &str) -> bool {
+        matches!(key, "openai_api_key")
+    }
+
     // Server Config CRUD
     pub fn save_server_config(&self, config: &super::models::ServerConfig) -> Result<()> {
+        // Move secrets into the OS keychain; the DB column holds "" when the
+        // keychain accepted the value, or the plaintext as a fallback.
+        let auth_token = Self::stash_secret(&config.id, "auth_token", &config.auth_token);
+        let auth_password = Self::stash_secret(&config.id, "auth_password", &config.auth_password);
+        let api_key_value = Self::stash_secret(&config.id, "api_key_value", &config.api_key_value);
+
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT OR REPLACE INTO server_configs (id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT OR REPLACE INTO server_configs (id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, allow_invalid_certs, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 config.id,
                 config.name,
                 config.base_url,
                 config.auth_type,
-                config.auth_token,
+                auth_token,
                 config.auth_username,
-                config.auth_password,
+                auth_password,
                 config.api_key_header,
-                config.api_key_value,
+                api_key_value,
+                config.allow_invalid_certs,
                 config.created_at,
                 config.updated_at,
             ],
@@ -175,9 +264,9 @@ impl Database {
     pub fn get_server_configs(&self) -> Result<Vec<super::models::ServerConfig>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, created_at, updated_at FROM server_configs ORDER BY updated_at DESC"
+            "SELECT id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, allow_invalid_certs, created_at, updated_at FROM server_configs ORDER BY updated_at DESC"
         )?;
-        let configs = stmt.query_map([], |row| {
+        let mut configs = stmt.query_map([], |row| {
             Ok(super::models::ServerConfig {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -188,17 +277,21 @@ impl Database {
                 auth_password: row.get(6)?,
                 api_key_header: row.get(7)?,
                 api_key_value: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                allow_invalid_certs: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })?.collect::<Result<Vec<_>>>()?;
+        for config in &mut configs {
+            Self::hydrate_secrets(config);
+        }
         Ok(configs)
     }
 
     pub fn get_server_config(&self, id: &str) -> Result<Option<super::models::ServerConfig>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, created_at, updated_at FROM server_configs WHERE id = ?1"
+            "SELECT id, name, base_url, auth_type, auth_token, auth_username, auth_password, api_key_header, api_key_value, allow_invalid_certs, created_at, updated_at FROM server_configs WHERE id = ?1"
         )?;
         let mut rows = stmt.query_map(params![id], |row| {
             Ok(super::models::ServerConfig {
@@ -211,19 +304,40 @@ impl Database {
                 auth_password: row.get(6)?,
                 api_key_header: row.get(7)?,
                 api_key_value: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                allow_invalid_certs: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })?;
         match rows.next() {
-            Some(row) => Ok(Some(row?)),
+            Some(row) => {
+                let mut config = row?;
+                Self::hydrate_secrets(&mut config);
+                Ok(Some(config))
+            }
             None => Ok(None),
         }
     }
 
     pub fn delete_server_config(&self, id: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM server_configs WHERE id = ?1", params![id])?;
+        {
+            let conn = self.conn.lock().unwrap();
+            // SQLite foreign keys are not enforced here, so cascade manually to
+            // avoid orphaned rows pointing at a deleted server.
+            conn.execute(
+                "DELETE FROM load_test_results WHERE test_run_id IN (SELECT id FROM test_runs WHERE server_config_id = ?1)",
+                params![id],
+            )?;
+            conn.execute(
+                "DELETE FROM validation_results WHERE test_run_id IN (SELECT id FROM test_runs WHERE server_config_id = ?1)",
+                params![id],
+            )?;
+            conn.execute("DELETE FROM test_runs WHERE server_config_id = ?1", params![id])?;
+            conn.execute("DELETE FROM field_mapping_rules WHERE server_config_id = ?1", params![id])?;
+            conn.execute("DELETE FROM sample_data WHERE server_config_id = ?1", params![id])?;
+            conn.execute("DELETE FROM server_configs WHERE id = ?1", params![id])?;
+        }
+        Self::purge_secrets(id);
         Ok(())
     }
 
@@ -330,6 +444,35 @@ impl Database {
         Ok(())
     }
 
+    pub fn save_validation_results(&self, results: &[super::models::ValidationResult]) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO validation_results (id, test_run_id, test_name, category, http_method, url, request_body, response_status, response_body, duration_ms, passed, failure_reason, executed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"
+            )?;
+            for result in results {
+                stmt.execute(params![
+                    result.id,
+                    result.test_run_id,
+                    result.test_name,
+                    result.category,
+                    result.http_method,
+                    result.url,
+                    result.request_body,
+                    result.response_status,
+                    result.response_body,
+                    result.duration_ms,
+                    result.passed,
+                    result.failure_reason,
+                    result.executed_at,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn get_validation_results(&self, test_run_id: &str) -> Result<Vec<super::models::ValidationResult>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -407,10 +550,22 @@ impl Database {
     }
 
     pub fn clear_all_data(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute_batch(
-            "DELETE FROM load_test_results; DELETE FROM validation_results; DELETE FROM test_runs; DELETE FROM field_mapping_rules; DELETE FROM server_configs;"
-        )?;
+        let ids: Vec<String> = {
+            let conn = self.conn.lock().unwrap();
+            // Capture server ids first so their keychain secrets can be purged.
+            let ids: Vec<String> = {
+                let mut stmt = conn.prepare("SELECT id FROM server_configs")?;
+                let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            conn.execute_batch(
+                "DELETE FROM load_test_results; DELETE FROM validation_results; DELETE FROM test_runs; DELETE FROM field_mapping_rules; DELETE FROM sample_data; DELETE FROM server_configs;"
+            )?;
+            ids
+        };
+        for id in ids {
+            Self::purge_secrets(&id);
+        }
         Ok(())
     }
 

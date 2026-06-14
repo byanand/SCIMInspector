@@ -28,6 +28,11 @@ jobs:
       - name: Build Angular
         run: npx ng build
 
+      - name: Test frontend
+        run: npx ng test
+        env:
+          CI: true
+
       - name: Check Rust
         working-directory: src-tauri
         run: cargo check
@@ -35,3 +40,7 @@ jobs:
       - name: Clippy
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
+
+      - name: Test Rust
+        working-directory: src-tauri
+        run: cargo test

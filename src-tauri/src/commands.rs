@@ -130,10 +130,8 @@ pub async fn run_validation(
 
     let results = ValidationEngine::run(&app, &client, &test_run_id, &config.categories, &field_mapping_rules, user_jp, group_jp, cancel_flag.clone()).await;
 
-    // Save results
-    for r in &results {
-        state.db.save_validation_result(r).map_err(|e| e.to_string())?;
-    }
+    // Save results (single transaction)
+    state.db.save_validation_results(&results).map_err(|e| e.to_string())?;
 
     // Compute and save summary
     let summary = ValidationEngine::compute_summary(&results);
@@ -329,7 +327,17 @@ pub async fn export_report(
         }
         "loadtest" => {
             let results = state.db.get_load_test_results(&request.test_run_id).map_err(|e| e.to_string())?;
-            let total_duration: i64 = results.last().map_or(0, |r| r.duration_ms);
+            // Reconstruct wall-clock duration from result timestamps as a
+            // best-effort fallback when the stored summary is unavailable.
+            let total_duration: i64 = {
+                let times: Vec<i64> = results.iter()
+                    .filter_map(|r| chrono::DateTime::parse_from_rfc3339(&r.timestamp).ok().map(|d| d.timestamp_millis()))
+                    .collect();
+                match (times.iter().min(), times.iter().max()) {
+                    (Some(&min), Some(&max)) => (max - min).max(0),
+                    _ => 0,
+                }
+            };
             let summary: LoadTestSummary = test_run.summary_json
                 .as_ref()
                 .and_then(|s| serde_json::from_str(s).ok())

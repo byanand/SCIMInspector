@@ -718,7 +718,7 @@ td{padding:4px 10px;border-bottom:1px solid #e0e0e0}
                 ep_chart.x_axis().set_name("ms");
                 ep_chart.set_style(10);
                 ep_chart.set_width(460);
-                ep_chart.set_height((endpoints.len() as u32 * 28 + 120).min(380) as u32);
+                ep_chart.set_height((endpoints.len() as u32 * 28 + 120).min(380));
                 ep_chart.add_series()
                     .set_name("Avg Latency (ms)")
                     .set_categories(("Summary & Charts", ep_data_first, 5, ep_data_last, 5))

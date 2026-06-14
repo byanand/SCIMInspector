@@ -94,6 +94,18 @@
                 <input matInput type="password" [ngModel]="formData().api_key_value" (ngModelChange)="updateFormField('api_key_value', $event)">
               </mat-form-field>
             }
+
+            <div class="tls-toggle full-width">
+              <mat-slide-toggle
+                [ngModel]="formData().allow_invalid_certs"
+                (ngModelChange)="updateFormField('allow_invalid_certs', $event)">
+                Allow invalid / self-signed TLS certificates
+              </mat-slide-toggle>
+              <p class="tls-hint">
+                Leave off for production servers. Only enable for local or test servers
+                using self-signed certificates — it disables certificate verification.
+              </p>
+            </div>
           </div>
 
           @if (connectionResult()) {

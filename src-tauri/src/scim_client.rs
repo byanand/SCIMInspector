@@ -37,7 +37,9 @@ impl ScimClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .pool_max_idle_per_host(100)
-            .danger_accept_invalid_certs(true) // Allow self-signed certs for dev/testing
+            // TLS validation is enforced by default; only relaxed when the user
+            // explicitly opts in per server (e.g. for self-signed dev servers).
+            .danger_accept_invalid_certs(config.allow_invalid_certs)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -59,7 +61,7 @@ impl ScimClient {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .pool_max_idle_per_host(max_connections)
-            .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_certs(config.allow_invalid_certs)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 

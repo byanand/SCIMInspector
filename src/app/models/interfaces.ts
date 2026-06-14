@@ -8,6 +8,7 @@ export interface ServerConfig {
   auth_password?: string;
   api_key_header?: string;
   api_key_value?: string;
+  allow_invalid_certs?: boolean;
   created_at: string;
   updated_at: string;
 }

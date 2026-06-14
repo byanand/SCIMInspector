@@ -1,12 +1,16 @@
 <mat-sidenav-container class="app-container">
-  <mat-sidenav mode="side" opened class="app-sidenav">
+  <mat-sidenav
+    [mode]="isNarrow() ? 'over' : 'side'"
+    [opened]="sidenavOpened()"
+    (openedChange)="sidenavOpened.set($event)"
+    class="app-sidenav">
     <div class="sidenav-header">
       <mat-icon class="app-logo">security</mat-icon>
       <span class="app-title">SCIM Inspector</span>
     </div>
     <mat-nav-list>
       @for (item of navItems; track item.path) {
-        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-link">
+        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-link" (click)="onNavClick()">
           <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
           <span matListItemTitle>{{ item.label }}</span>
         </a>
@@ -16,6 +20,11 @@
 
   <mat-sidenav-content class="app-content">
     <mat-toolbar class="app-toolbar">
+      @if (isNarrow()) {
+        <button mat-icon-button class="sidenav-toggle" (click)="toggleSidenav()" aria-label="Toggle navigation">
+          <mat-icon>menu</mat-icon>
+        </button>
+      }
       <span class="toolbar-page-title">{{ currentPageTitle() }}</span>
       <span class="toolbar-spacer"></span>
 
