@@ -18,15 +18,22 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             label: windows
+            bundles: msi,nsis
           - platform: macos-latest
             target: aarch64-apple-darwin
             label: macos-arm
+            bundles: app,dmg
           - platform: macos-latest
             target: x86_64-apple-darwin
             label: macos-intel
+            bundles: app,dmg
+          # Linux: deb + rpm only. AppImage is intentionally excluded — its
+          # bundler downloads linuxdeploy at build time and needs FUSE, which
+          # is unreliable on CI runners and broke the v0.2.1 Linux release.
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             label: linux
+            bundles: deb,rpm
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -76,12 +83,12 @@ jobs:
             | Windows (64-bit) | `.exe` installer or `.msi` |
             | macOS (Apple Silicon) | `.dmg` |
             | macOS (Intel) | `.dmg` |
-            | Linux (64-bit) | `.AppImage` or `.deb` |
+            | Linux (64-bit) | `.deb` or `.rpm` |
 
             > **Windows:** If SmartScreen warns you, click "More info" → "Run anyway".
           releaseDraft: false
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
   # ── Code-sign Windows artifacts with SignPath.io ──────────────────────
   # This job runs only after the Windows build completes.
