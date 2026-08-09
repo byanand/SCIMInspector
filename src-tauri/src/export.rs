@@ -154,7 +154,7 @@ td{padding:6px 12px;border-bottom:1px solid #e0e0e0}
             let reason = r.failure_reason.as_deref().unwrap_or("-");
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}ms</td><td class=\"{}\">{}</td><td>{}</td></tr>",
-                html_escape(&r.test_name), html_escape(&r.category), &r.http_method,
+                html_escape(&r.test_name), html_escape(&r.category), r.http_method,
                 status, r.duration_ms, result_class, result_text, html_escape(reason)
             ));
         }
@@ -232,7 +232,7 @@ td{padding:4px 10px;border-bottom:1px solid #e0e0e0}
             let status = r.status_code.map_or("-".to_string(), |s| s.to_string());
             html.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}ms</td><td>{}</td></tr>",
-                r.request_index, &r.http_method, html_escape(&r.url),
+                r.request_index, r.http_method, html_escape(&r.url),
                 status, r.duration_ms, if r.success { "✓" } else { "✗" }
             ));
         }
