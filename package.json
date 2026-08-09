@@ -35,7 +35,7 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "chart.js": "^4.5.1",
-    "ng2-charts": "^8.0.0",
+    "ng2-charts": "^10.0.0",
     "ngx-monaco-editor-v2": "^21.1.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
@@ -45,7 +45,7 @@
     "@angular/cli": "^21.1.0",
     "@angular/compiler-cli": "^21.1.0",
     "@tauri-apps/cli": "^2.10.0",
-    "jsdom": "^27.1.0",
+    "jsdom": "^29.1.1",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8"
   }

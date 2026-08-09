@@ -677,12 +677,13 @@ impl Database {
 
     pub fn get_sample_data_count(&self, server_config_id: &str) -> Result<usize> {
         let conn = self.conn.lock().unwrap();
-        let count: usize = conn.query_row(
+        // rusqlite 0.40 dropped its FromSql impl for usize; COUNT(*) is an i64.
+        let count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM sample_data WHERE server_config_id = ?1",
             params![server_config_id],
             |row| row.get(0),
         )?;
-        Ok(count)
+        Ok(count.max(0) as usize)
     }
 
     pub fn seed_default_sample_data(&self, server_config_id: &str) -> Result<()> {

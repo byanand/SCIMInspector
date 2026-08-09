@@ -20,17 +20,20 @@ tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-rusqlite = { version = "0.31", features = ["bundled"] }
+reqwest = { version = "0.13", features = ["json", "rustls"], default-features = false }
+rusqlite = { version = "0.40", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-base64 = "0.22"
-rand = "0.8"
-thiserror = "1"
-csv = "1.3"
+base64 = "0.23"
+rand = "0.10"
+thiserror = "2"
+csv = "1.4"
 regex-lite = "0.1"
 tauri-plugin-opener = "2"
-rust_xlsxwriter = "0.93.0"
+rust_xlsxwriter = "0.97.1"
+# Held at 3.x deliberately. keyring 4 is a ground-up rewrite (keyring-core plus
+# per-platform store crates) and it is not verified that credentials written by
+# 3.x remain readable, which would silently orphan users' saved SCIM tokens.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 [build-dependencies]
