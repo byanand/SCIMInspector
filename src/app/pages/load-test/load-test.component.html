@@ -95,7 +95,7 @@
         <div class="progress-header">
           <span class="phase-label">{{ progress()?.phase || 'Running' }}</span>
           <span>{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
-          <span>{{ progress()?.current_rps | number:'1.1-1' }} req/s</span>
+          <span>{{ $safeNavigationMigration(progress()?.current_rps) | number:'1.1-1' }} req/s</span>
           @if ((progress()?.error_count ?? 0) > 0) {
             <span class="error-count">{{ progress()?.error_count }} errors</span>
           }

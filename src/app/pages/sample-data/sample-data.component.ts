@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, computed, effect, OnDestroy } from '@angular/core';
+import { Component, inject, signal, OnInit, computed, effect, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -31,6 +31,7 @@ import { SampleData } from '../../models/interfaces';
     MatMenuModule, MonacoEditorModule
   ],
   templateUrl: './sample-data.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './sample-data.component.scss',
 })
 export class SampleDataComponent implements OnInit, OnDestroy {

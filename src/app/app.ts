@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, OnInit, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { filter } from 'rxjs/operators';
@@ -35,6 +35,7 @@ import { UpdateService } from './services/update.service';
     MatProgressSpinnerModule,
   ],
   templateUrl: './app.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App implements OnInit {

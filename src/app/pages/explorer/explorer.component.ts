@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, OnDestroy, computed, effect } from '@angular/core';
+import { Component, inject, signal, OnInit, OnDestroy, computed, effect, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -306,6 +306,7 @@ const SCIM_OPERATIONS: ScimOperation[] = [
     MonacoEditorModule
   ],
   templateUrl: './explorer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './explorer.component.scss',
 })
 export class ExplorerComponent implements OnInit, OnDestroy {

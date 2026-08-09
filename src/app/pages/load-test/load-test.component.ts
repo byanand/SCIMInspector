@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
+import { Component, inject, signal, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -37,6 +37,7 @@ interface ScenarioInfo {
     MatDividerModule, MatSliderModule, MatTabsModule, MatTooltipModule, BaseChartDirective
   ],
   templateUrl: './load-test.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './load-test.component.scss'
 })
 export class LoadTestComponent implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -24,6 +24,7 @@ import { UpdateService } from '../../services/update.service';
     MatFormFieldModule, MatInputModule, MatProgressSpinnerModule
   ],
   templateUrl: './settings.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './settings.component.scss'
 })
 export class SettingsComponent implements OnInit {

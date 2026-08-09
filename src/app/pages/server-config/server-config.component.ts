@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, signal, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -27,6 +27,7 @@ import { ServerConfig, TestConnectionResult } from '../../models';
     MatChipsModule, MatDividerModule, MatSlideToggleModule,
   ],
   templateUrl: './server-config.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './server-config.component.scss',
 })
 export class ServerConfigComponent implements OnInit {

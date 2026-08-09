@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, OnDestroy, OnInit } from '@angular/core';
+import { Component, computed, inject, signal, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -35,6 +35,7 @@ interface CategoryToggle {
     MatFormFieldModule, MatInputModule
   ],
   templateUrl: './validation.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './validation.component.scss'
 })
 export class ValidationComponent implements OnInit, OnDestroy {

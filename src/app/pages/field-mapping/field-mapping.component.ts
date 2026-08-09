@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit, computed } from '@angular/core';
+import { Component, inject, signal, OnInit, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -36,6 +36,7 @@ interface ScimAttributePreset {
     MatProgressSpinnerModule
   ],
   templateUrl: './field-mapping.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './field-mapping.component.scss'
 })
 export class FieldMappingComponent implements OnInit {
