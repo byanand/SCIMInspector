@@ -15,6 +15,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ThemeService } from './services/theme.service';
 import { ServerConfigService } from './services/server-config.service';
 import { ScimSchemaService } from './services/scim-schema.service';
+import { UpdateService } from './services/update.service';
 
 @Component({
   selector: 'app-root',
@@ -50,6 +51,7 @@ export class App implements OnInit {
   ];
 
   scimSchemaService = inject(ScimSchemaService);
+  private updateService = inject(UpdateService);
   private router = inject(Router);
   private breakpoints = inject(BreakpointObserver);
   currentPageTitle = signal('Dashboard');
@@ -91,6 +93,8 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     this.serverConfigService.loadConfigs();
+    // Fire-and-forget: throttled internally and silent on failure.
+    this.updateService.checkOnStartup();
   }
 
   toggleTheme(): void {

@@ -15,6 +15,7 @@ import {
   ExplorerRequest,
   ExplorerResponse,
   SampleData,
+  UpdateInfo,
 } from '../models';
 
 // Lazy-load Tauri APIs so the import doesn't break in browsers
@@ -301,6 +302,27 @@ export class TauriService {
     const settings: Record<string, string> = lsGet('scim_app_settings', {});
     delete settings[key];
     lsSet('scim_app_settings', settings);
+  }
+
+  // ── Updates ──
+
+  async getAppVersion(): Promise<string> {
+    await this.ready;
+    if (isTauri()) return tauriInvoke!<string>('get_app_version');
+    return 'dev';
+  }
+
+  async checkForUpdate(): Promise<UpdateInfo> {
+    await this.ready;
+    if (isTauri()) return tauriInvoke!<UpdateInfo>('check_for_update');
+    // Browser mode ships from source, so there is nothing to update to.
+    throw new Error('Update checks are only available in the desktop app');
+  }
+
+  async openReleasePage(url: string): Promise<void> {
+    await this.ready;
+    if (isTauri()) return tauriInvoke!<void>('open_release_page', { url });
+    window.open(url, '_blank', 'noopener');
   }
 
   // ── SCIM Explorer ──

@@ -6,6 +6,7 @@ pub mod validation;
 pub mod load_test;
 pub mod export;
 pub mod commands;
+pub mod updater;
 
 use commands::AppState;
 use db::Database;
@@ -59,6 +60,9 @@ pub fn run() {
             commands::save_sample_data,
             commands::delete_sample_data,
             commands::seed_sample_data,
+            updater::get_app_version,
+            updater::check_for_update,
+            updater::open_release_page,
         ])
         .run(tauri::generate_context!())
         .expect("Error while running SCIM Inspector");

@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ThemeService } from '../../services/theme.service';
 import { TauriService } from '../../services/tauri.service';
 import { NotificationService } from '../../services/notification.service';
+import { UpdateService } from '../../services/update.service';
 
 @Component({
   selector: 'app-settings',
@@ -27,10 +28,15 @@ import { NotificationService } from '../../services/notification.service';
 })
 export class SettingsComponent implements OnInit {
   themeService = inject(ThemeService);
+  updateService = inject(UpdateService);
   private tauriService = inject(TauriService);
   private notificationService = inject(NotificationService);
 
   confirmingClear = signal(false);
+
+  // Updates
+  appVersion = signal('');
+  updateCheckEnabled = signal(true);
 
   // OpenAI settings
   openaiKey = signal('');
@@ -42,6 +48,25 @@ export class SettingsComponent implements OnInit {
 
   async ngOnInit() {
     await this.loadOpenAiKey();
+    await this.loadUpdateSettings();
+  }
+
+  private async loadUpdateSettings() {
+    try {
+      this.appVersion.set(await this.tauriService.getAppVersion());
+      this.updateCheckEnabled.set(await this.updateService.isEnabled());
+    } catch { /* ignore */ }
+  }
+
+  async toggleUpdateCheck(enabled: boolean) {
+    this.updateCheckEnabled.set(enabled);
+    try {
+      await this.updateService.setEnabled(enabled);
+    } catch (err: any) {
+      // Roll the switch back so it reflects what was actually persisted.
+      this.updateCheckEnabled.set(!enabled);
+      this.notificationService.error('Failed to save setting: ' + (err?.message || err));
+    }
   }
 
   private async loadOpenAiKey() {

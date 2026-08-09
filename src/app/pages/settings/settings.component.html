@@ -80,6 +80,65 @@
     </mat-card-content>
   </mat-card>
 
+  <!-- Updates -->
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>
+        <mat-icon>system_update</mat-icon> Updates
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Check for updates on startup</span>
+          <span class="setting-description">
+            Once a day, check GitHub for a newer release. Nothing is downloaded or
+            installed automatically — you'll get a notification with a download link.
+          </span>
+        </div>
+        <mat-slide-toggle
+          [checked]="updateCheckEnabled()"
+          (change)="toggleUpdateCheck($event.checked)">
+        </mat-slide-toggle>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Current version</span>
+          <span class="setting-description">
+            @if (updateService.latest(); as info) {
+              @if (info.update_available) {
+                <span class="key-status not-configured">
+                  Version {{ info.latest_version }} is available
+                </span>
+              } @else {
+                <span class="key-status configured">Up to date</span>
+              }
+            } @else {
+              v{{ appVersion() }}
+            }
+          </span>
+        </div>
+        <div class="clear-actions">
+          @if (updateService.latest()?.update_available) {
+            <button mat-raised-button color="primary"
+              (click)="updateService.openReleasePage(updateService.latest()!.release_url)">
+              <mat-icon>download</mat-icon> Download
+            </button>
+          }
+          <button mat-stroked-button (click)="updateService.checkNow()"
+            [disabled]="updateService.checking()">
+            @if (updateService.checking()) {
+              <mat-spinner diameter="18"></mat-spinner>
+            } @else {
+              <mat-icon>refresh</mat-icon>
+            }
+            Check Now
+          </button>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <!-- Data Management -->
   <mat-card>
     <mat-card-header>
@@ -120,7 +179,7 @@
     <mat-card-content>
       <div class="about-content">
         <h2>SCIM Inspector</h2>
-        <p class="version">Version 1.0.0</p>
+        <p class="version">Version {{ appVersion() }}</p>
         <p>A desktop application for validating SCIM 2.0 server compliance and load testing SCIM endpoints.</p>
         <mat-divider></mat-divider>
         <div class="about-details">
