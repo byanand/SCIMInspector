@@ -1,323 +1,295 @@
-import { Component, inject, signal, OnInit, computed, effect, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, OnInit, computed, effect, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatMenuModule } from '@angular/material/menu';
-import { MonacoEditorModule } from 'ngx-monaco-editor-v2';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { ThemeService } from '../../services/theme.service';
-import { ScimSchemaService } from '../../services/scim-schema.service';
+import { NavCountsService } from '../../services/nav-counts.service';
+import { BusyService } from '../../services/busy.service';
+import { UI, TabDef } from '../../ui';
 import { SampleData } from '../../models/interfaces';
+
+type ResourceType = 'user' | 'group';
+/** A card is read-only, being edited, or asking to confirm its own deletion. */
+type CardMode = 'read' | 'edit' | 'confirm';
+
+const USER_TEMPLATE = {
+  schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+  userName: 'user@example.com',
+  name: { givenName: 'First', familyName: 'Last' },
+  displayName: 'First Last',
+  emails: [{ value: 'user@example.com', type: 'work', primary: true }],
+  active: true,
+};
+
+const GROUP_TEMPLATE = {
+  schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+  displayName: 'Team Name',
+  members: [],
+};
 
 @Component({
   selector: 'app-sample-data',
-  standalone: true,
-  imports: [
-    CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatChipsModule,
-    MatDividerModule, MatTooltipModule, MatTabsModule, MatProgressSpinnerModule,
-    MatMenuModule, MonacoEditorModule
-  ],
+  imports: [FormsModule, MatTooltipModule, MatMenuModule, ...UI],
   templateUrl: './sample-data.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './sample-data.component.scss',
 })
-export class SampleDataComponent implements OnInit, OnDestroy {
-  private tauriService = inject(TauriService);
-  serverConfigService = inject(ServerConfigService);
-  private notificationService = inject(NotificationService);
-  private themeService = inject(ThemeService);
-  scimSchemaService = inject(ScimSchemaService);
+export class SampleDataComponent implements OnInit {
+  private readonly tauri = inject(TauriService);
+  private readonly notify = inject(NotificationService);
+  private readonly counts = inject(NavCountsService);
+  readonly serverConfigService = inject(ServerConfigService);
+  readonly busy = inject(BusyService);
 
-  // Monaco editor options
-  editorOptions = computed(() => ({
-    theme: this.themeService.darkMode() ? 'vs-dark' : 'vs',
-    language: 'json',
-    automaticLayout: true,
-    minimap: { enabled: false },
-    scrollBeyondLastLine: false,
-    fontSize: 14,
-    lineNumbers: 'on' as const,
-    renderLineHighlight: 'all' as const,
-    bracketPairColorization: { enabled: true },
-    formatOnPaste: true,
-    tabSize: 2,
-    wordWrap: 'on' as const,
-    folding: true,
-    glyphMargin: false,
-    lineDecorationsWidth: 8,
-    padding: { top: 8, bottom: 8 },
-  }));
+  readonly items = signal<SampleData[]>([]);
+  readonly activeTab = signal<ResourceType>('user');
 
-  // Data
-  items = signal<SampleData[]>([]);
-  loading = signal(false);
-  saving = signal(false);
+  /** id of the card currently in a non-read mode, and which mode that is. */
+  readonly openId = signal<string | null>(null);
+  readonly mode = signal<CardMode>('read');
 
-  // Editor
-  editingItem = signal<SampleData | null>(null);
-  isNew = signal(false);
-  editorName = signal('');
-  editorType = signal<'user' | 'group'>('user');
-  editorJson = signal('');
-  jsonError = signal('');
-  monacoEditor: any = null;
-  private monacoModel: any = null;
-  private modelContentListener: any = null;
+  readonly draftName = signal('');
+  readonly draftJson = signal('');
 
-  onMonacoInit(editor: any) {
-    this.monacoEditor = editor;
-    // Register global schemas (safe to call multiple times)
-    this.scimSchemaService.registerMonacoSchemas();
-    // Defer model swap to next tick so Monaco finishes initializing
-    // (prevents "Canceled" error from pending internal operations)
-    setTimeout(() => this.applyEditorModel(), 0);
-  }
+  /** Holds the last deletion so it can be put back. */
+  readonly lastDeleted = signal<SampleData | null>(null);
 
-  /** Create/swap the Monaco model with a URI that routes to the correct schema. */
-  private applyEditorModel(): void {
-    if (!this.monacoEditor) return;
-    const monaco = (window as any).monaco;
-    if (!monaco) return;
+  readonly tabs = computed<TabDef[]>(() => [
+    { id: 'user', label: `Users (${this.count('user')})` },
+    { id: 'group', label: `Groups (${this.count('group')})` },
+  ]);
 
-    // Dispose previous listener (but keep models alive to avoid cancel errors)
-    if (this.modelContentListener) {
-      this.modelContentListener.dispose();
-      this.modelContentListener = null;
+  readonly visible = computed(() =>
+    this.items().filter((i) => i.resource_type === this.activeTab())
+  );
+
+  /** Live verdict on the draft, shown in the editor footer. */
+  readonly draftStatus = computed(() => {
+    try {
+      const parsed = JSON.parse(this.draftJson());
+      const attrs = parsed && typeof parsed === 'object' ? Object.keys(parsed).length : 0;
+      return { valid: true, text: `Valid JSON · ${attrs} attributes` };
+    } catch (e) {
+      return { valid: false, text: e instanceof Error ? e.message : 'Invalid JSON' };
     }
-
-    const type = this.editorType();
-    const uriStr = this.scimSchemaService.getModelUri('sample-data', type);
-    const uri = monaco.Uri.parse(uriStr);
-
-    // Reuse existing model or create new
-    let model = monaco.editor.getModel(uri);
-    if (model) {
-      model.setValue(this.editorJson());
-    } else {
-      model = monaco.editor.createModel(this.editorJson(), 'json', uri);
-    }
-
-    // Track the previous model so we can dispose it after the swap
-    const prevModel = this.monacoModel;
-    this.monacoModel = model;
-    this.monacoEditor.setModel(model);
-
-    // Dispose old model after new one is active (safe now — no pending ops)
-    if (prevModel && prevModel !== model) {
-      try { prevModel.dispose(); } catch (_) { /* already disposed */ }
-    }
-
-    // Listen for content changes and sync back to signal
-    this.modelContentListener = model.onDidChangeContent(() => {
-      this.editorJson.set(model.getValue());
-    });
-  }
-
-  private disposeMonacoModel(): void {
-    if (this.modelContentListener) {
-      this.modelContentListener.dispose();
-      this.modelContentListener = null;
-    }
-    if (this.monacoModel) {
-      try { this.monacoModel.dispose(); } catch (_) { /* already disposed */ }
-      this.monacoModel = null;
-    }
-  }
-
-  // Filtered views
-  userItems = computed(() => this.items().filter(i => i.resource_type === 'user'));
-  groupItems = computed(() => this.items().filter(i => i.resource_type === 'group'));
+  });
 
   constructor() {
-    // Auto-reload when server changes
     effect(() => {
       const server = this.serverConfigService.selectedConfig();
       if (server) {
-        this.loadData(server.id);
+        void this.loadData(server.id);
       } else {
         this.items.set([]);
       }
     });
+  }
 
-    // Re-apply Monaco model when editorType changes (User ↔ Group)
-    effect(() => {
-      const _type = this.editorType(); // track dependency
-      if (this.monacoEditor) {
-        this.applyEditorModel();
+  async ngOnInit(): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (server) await this.loadData(server.id);
+  }
+
+  private count(type: ResourceType): number {
+    return this.items().filter((i) => i.resource_type === type).length;
+  }
+
+  async loadData(serverConfigId: string): Promise<void> {
+    try {
+      this.items.set(await this.tauri.getSampleData(serverConfigId));
+    } catch (err) {
+      this.notify.error('Failed to load sample data: ' + this.message(err));
+    }
+  }
+
+  // ── Card modes ─────────────────────────────────────────────────────────────
+  isMode(item: SampleData, mode: CardMode): boolean {
+    return this.openId() === item.id && this.mode() === mode;
+  }
+
+  edit(item: SampleData): void {
+    this.openId.set(item.id);
+    this.mode.set('edit');
+    this.draftName.set(item.name);
+    this.draftJson.set(item.data_json);
+  }
+
+  askDelete(item: SampleData): void {
+    this.openId.set(item.id);
+    this.mode.set('confirm');
+  }
+
+  cancel(): void {
+    this.openId.set(null);
+    this.mode.set('read');
+  }
+
+  // ── Writes ─────────────────────────────────────────────────────────────────
+  async save(item: SampleData): Promise<void> {
+    if (!this.draftStatus().valid) return;
+
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+
+    if (!this.draftName().trim()) {
+      this.notify.error('Name is required.');
+      return;
+    }
+
+    try {
+      await this.tauri.saveSampleData({
+        id: item.id,
+        server_config_id: server.id,
+        resource_type: item.resource_type,
+        name: this.draftName().trim(),
+        data_json: this.draftJson(),
+        is_default: item.is_default,
+        created_at: item.created_at,
+      });
+      this.cancel();
+      await this.refresh();
+      this.notify.success('Template updated.');
+    } catch (err) {
+      this.notify.error('Failed to save: ' + this.message(err));
+    }
+  }
+
+  async create(type: ResourceType): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+
+    const body = type === 'user' ? USER_TEMPLATE : GROUP_TEMPLATE;
+    try {
+      const created = await this.tauri.saveSampleData({
+        id: '',
+        server_config_id: server.id,
+        resource_type: type,
+        name: type === 'user' ? 'New user template' : 'New group template',
+        data_json: JSON.stringify(body, null, 2),
+        is_default: false,
+        created_at: '',
+      });
+      this.activeTab.set(type);
+      await this.refresh();
+      // Drop straight into editing — a new template is never useful as-is.
+      this.edit(created);
+    } catch (err) {
+      this.notify.error('Failed to create: ' + this.message(err));
+    }
+  }
+
+  async duplicate(item: SampleData): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+
+    try {
+      await this.tauri.saveSampleData({
+        id: '',
+        server_config_id: server.id,
+        resource_type: item.resource_type,
+        name: `${item.name} (copy)`,
+        data_json: item.data_json,
+        is_default: false,
+        created_at: '',
+      });
+      await this.refresh();
+    } catch (err) {
+      this.notify.error('Failed to duplicate: ' + this.message(err));
+    }
+  }
+
+  async confirmDelete(item: SampleData): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+
+    try {
+      await this.tauri.deleteSampleData(item.id, server.id);
+      // Kept so the undo banner can restore it without a round trip.
+      this.lastDeleted.set(item);
+      this.cancel();
+      await this.refresh();
+    } catch (err) {
+      this.notify.error('Delete failed: ' + this.message(err));
+    }
+  }
+
+  /** Re-creates the deleted template. It returns with a new id. */
+  async undoDelete(): Promise<void> {
+    const item = this.lastDeleted();
+    const server = this.serverConfigService.selectedConfig();
+    if (!item || !server) return;
+
+    try {
+      await this.tauri.saveSampleData({
+        id: '',
+        server_config_id: server.id,
+        resource_type: item.resource_type,
+        name: item.name,
+        data_json: item.data_json,
+        is_default: item.is_default,
+        created_at: '',
+      });
+      this.lastDeleted.set(null);
+      await this.refresh();
+    } catch (err) {
+      this.notify.error('Restore failed: ' + this.message(err));
+    }
+  }
+
+  dismissUndo(): void {
+    this.lastDeleted.set(null);
+  }
+
+  async seedDefaults(): Promise<void> {
+    const server = this.serverConfigService.selectedConfig();
+    if (!server) return;
+
+    await this.busy.run('seed', async () => {
+      try {
+        await this.tauri.seedSampleData(server.id);
+        await this.refresh();
+        this.notify.success('Default templates seeded.');
+      } catch (err) {
+        this.notify.error('Seed failed: ' + this.message(err));
       }
     });
   }
 
-  ngOnDestroy(): void {
-    this.disposeMonacoModel();
+  copy(json: string): void {
+    void navigator.clipboard.writeText(json).then(() => this.notify.success('Copied to clipboard.'));
   }
 
-  async ngOnInit() {
-    const server = this.serverConfigService.selectedConfig();
-    if (server) {
-      await this.loadData(server.id);
-    }
+  meta(item: SampleData): string {
+    const label = item.resource_type === 'user' ? 'User template' : 'Group template';
+    const attrs = this.attributeCount(item.data_json);
+    return attrs === null ? label : `${label} · ${attrs} attributes`;
   }
 
-  async loadData(serverConfigId: string) {
-    this.loading.set(true);
+  deleteNote(item: SampleData): string {
+    return item.is_default
+      ? 'This is a seeded default. Seed defaults will bring it back.'
+      : 'This template is only stored locally and is not referenced by past runs.';
+  }
+
+  private attributeCount(json: string): number | null {
     try {
-      const data = await this.tauriService.getSampleData(serverConfigId);
-      this.items.set(data);
-    } catch (err: any) {
-      this.notificationService.error('Failed to load sample data: ' + (err?.message || err));
-    } finally {
-      this.loading.set(false);
+      const parsed = JSON.parse(json);
+      return parsed && typeof parsed === 'object' ? Object.keys(parsed).length : null;
+    } catch {
+      return null;
     }
   }
 
-  startNew(type: 'user' | 'group') {
-    this.editingItem.set(null);
-    this.isNew.set(true);
-    this.editorName.set('');
-    this.editorType.set(type);
-    this.jsonError.set('');
-
-    if (type === 'user') {
-      this.editorJson.set(JSON.stringify({
-        schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
-        userName: 'user@example.com',
-        name: { givenName: 'First', familyName: 'Last' },
-        displayName: 'First Last',
-        emails: [{ value: 'user@example.com', type: 'work', primary: true }],
-        active: true,
-      }, null, 2));
-    } else {
-      this.editorJson.set(JSON.stringify({
-        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
-        displayName: 'Team Name',
-        members: [],
-      }, null, 2));
-    }
-  }
-
-  editItem(item: SampleData) {
-    this.editingItem.set(item);
-    this.isNew.set(false);
-    this.editorName.set(item.name);
-    this.editorType.set(item.resource_type as 'user' | 'group');
-    this.editorJson.set(item.data_json);
-    this.jsonError.set('');
-  }
-
-  duplicateItem(item: SampleData) {
-    this.editingItem.set(null);
-    this.isNew.set(true);
-    this.editorName.set(item.name + ' (Copy)');
-    this.editorType.set(item.resource_type as 'user' | 'group');
-    this.editorJson.set(item.data_json);
-    this.jsonError.set('');
-  }
-
-  cancelEdit() {
-    this.editingItem.set(null);
-    this.isNew.set(false);
-  }
-
-  validateJson(): boolean {
-    try {
-      JSON.parse(this.editorJson());
-      this.jsonError.set('');
-      return true;
-    } catch (e: any) {
-      this.jsonError.set(e.message);
-      return false;
-    }
-  }
-
-  formatJson() {
-    if (this.monacoEditor) {
-      this.monacoEditor.getAction('editor.action.formatDocument')?.run();
-      return;
-    }
-    try {
-      const parsed = JSON.parse(this.editorJson());
-      this.editorJson.set(JSON.stringify(parsed, null, 2));
-      this.jsonError.set('');
-    } catch (e: any) {
-      this.jsonError.set(e.message);
-    }
-  }
-
-  async saveItem() {
-    if (!this.validateJson()) return;
-    const server = this.serverConfigService.selectedConfig();
-    if (!server) {
-      this.notificationService.error('Select a server first.');
-      return;
-    }
-    if (!this.editorName().trim()) {
-      this.notificationService.error('Name is required.');
-      return;
-    }
-
-    this.saving.set(true);
-    try {
-      const existing = this.editingItem();
-      await this.tauriService.saveSampleData({
-        id: existing?.id || '',
-        server_config_id: server.id,
-        resource_type: this.editorType(),
-        name: this.editorName().trim(),
-        data_json: this.editorJson(),
-        is_default: existing?.is_default ?? false,
-        created_at: existing?.created_at || '',
-      });
-      this.notificationService.success(this.isNew() ? 'Sample data created.' : 'Sample data updated.');
-      this.cancelEdit();
-      await this.loadData(server.id);
-    } catch (err: any) {
-      this.notificationService.error('Failed to save: ' + (err?.message || err));
-    } finally {
-      this.saving.set(false);
-    }
-  }
-
-  async deleteItem(item: SampleData) {
+  private async refresh(): Promise<void> {
     const server = this.serverConfigService.selectedConfig();
     if (!server) return;
-    try {
-      await this.tauriService.deleteSampleData(item.id, server.id);
-      this.notificationService.success('Deleted "' + item.name + '".');
-      await this.loadData(server.id);
-    } catch (err: any) {
-      this.notificationService.error('Delete failed: ' + (err?.message || err));
-    }
+    await this.loadData(server.id);
+    await this.counts.refreshForServer(server.id);
   }
 
-  async seedDefaults() {
-    const server = this.serverConfigService.selectedConfig();
-    if (!server) return;
-    try {
-      await this.tauriService.seedSampleData(server.id);
-      this.notificationService.success('Default sample data seeded.');
-      await this.loadData(server.id);
-    } catch (err: any) {
-      this.notificationService.error('Seed failed: ' + (err?.message || err));
-    }
-  }
-
-  copyToClipboard(json: string) {
-    navigator.clipboard.writeText(json).then(() => {
-      this.notificationService.success('Copied to clipboard.');
-    });
+  private message(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
   }
 }

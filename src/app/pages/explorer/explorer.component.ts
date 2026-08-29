@@ -1,19 +1,7 @@
 import { Component, inject, signal, OnInit, OnDestroy, computed, effect, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatExpansionModule } from '@angular/material/expansion';
-import { MatTabsModule } from '@angular/material/tabs';
-import { MatBadgeModule } from '@angular/material/badge';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MonacoEditorModule } from 'ngx-monaco-editor-v2';
 import { TauriService } from '../../services/tauri.service';
@@ -21,6 +9,8 @@ import { NotificationService } from '../../services/notification.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { ThemeService } from '../../services/theme.service';
 import { ScimSchemaService } from '../../services/scim-schema.service';
+import { BusyService } from '../../services/busy.service';
+import { UI, TabDef } from '../../ui';
 import {
   ScimOperation,
   ExplorerResponse,
@@ -299,11 +289,12 @@ const SCIM_OPERATIONS: ScimOperation[] = [
   selector: 'app-explorer',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
-    MatSelectModule, MatFormFieldModule, MatInputModule, MatTooltipModule,
-    MatChipsModule, MatDividerModule, MatProgressSpinnerModule,
-    MatExpansionModule, MatTabsModule, MatBadgeModule, MatAutocompleteModule,
-    MonacoEditorModule
+    SlicePipe,
+    FormsModule,
+    MatTooltipModule,
+    MatAutocompleteModule,
+    MonacoEditorModule,
+    ...UI,
   ],
   templateUrl: './explorer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -315,6 +306,7 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   serverConfigService = inject(ServerConfigService);
   private themeService = inject(ThemeService);
   scimSchemaService = inject(ScimSchemaService);
+  readonly busy = inject(BusyService);
 
   // Monaco editor
   monacoEditor: any = null;
@@ -386,6 +378,63 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   batchTargets = signal<{ id: string; displayName: string }[]>([]);
   batchResults = signal<{ id: string; displayName: string; status: number; statusText: string }[]>([]);
   batchSearchTerm = signal('');
+
+  // ── Redesign state ───────────────────────────────────────────────────────
+  /** Free-text filter over the always-visible operation rail. */
+  opFilter = signal('');
+  /** Which response pane is showing: body, headers or session history. */
+  respTab = signal<'body' | 'headers' | 'history'>('body');
+  /** The schema browser drawer, opened from the page header. */
+  schemaOpen = signal(false);
+
+  readonly opGroups = computed(() => {
+    const q = this.opFilter().trim().toLowerCase();
+    const match = (o: ScimOperation) =>
+      !q ||
+      o.name.toLowerCase().includes(q) ||
+      o.method.toLowerCase().includes(q) ||
+      o.pathTemplate.toLowerCase().includes(q);
+
+    return [
+      { label: 'Users', icon: 'person', ops: this.userOps.filter(match) },
+      { label: 'Groups', icon: 'group', ops: this.groupOps.filter(match) },
+    ].filter((g) => g.ops.length > 0);
+  });
+
+  readonly noOpMatches = computed(() => this.opGroups().length === 0);
+
+  readonly respTabs = computed<TabDef[]>(() => [
+    { id: 'body', label: 'Body' },
+    { id: 'headers', label: `Headers (${this.responseHeaderEntries().length})` },
+    { id: 'history', label: `History (${this.sessionHistory().length})` },
+  ]);
+
+  /** Response size, shown beside the status so a large payload is obvious. */
+  readonly responseSize = computed(() => {
+    const body = this.response()?.body ?? '';
+    const bytes = new Blob([body]).size;
+    return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  });
+
+  /** Schemas discovered from the active server, for the drawer. */
+  readonly schemaGroups = computed(() => {
+    const byUrn = new Map<string, { name: string; urn: string; attrs: { name: string; type: string; required: boolean }[] }>();
+
+    for (const attr of this.scimSchemaService.discoveredAttributes()) {
+      let group = byUrn.get(attr.schema_urn);
+      if (!group) {
+        group = { name: attr.schema_name, urn: attr.schema_urn, attrs: [] };
+        byUrn.set(attr.schema_urn, group);
+      }
+      group.attrs.push({ name: attr.attr_name, type: attr.attr_type, required: false });
+    }
+
+    return [...byUrn.values()].map((g) => ({
+      ...g,
+      isCore: g.urn.includes(':core:'),
+      badge: g.urn.includes(':core:') ? 'core' : 'extension',
+    }));
+  });
 
   /** Operations that support multi-user roster picker */
   readonly ROSTER_OPS = new Set(['add_user_to_group', 'remove_user_from_group', 'update_group', 'create_group']);
@@ -482,10 +531,8 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   statusClass = computed(() => {
     const s = this.response()?.status;
     if (!s) return '';
-    if (s >= 200 && s < 300) return 'status-2xx';
-    if (s >= 300 && s < 400) return 'status-3xx';
-    if (s >= 400 && s < 500) return 'status-4xx';
-    return 'status-5xx';
+    if (s < 300) return 's-pass';
+    return s < 500 ? 's-warn' : 's-fail';
   });
 
   async ngOnInit() {
@@ -827,6 +874,11 @@ export class ExplorerComponent implements OnInit, OnDestroy {
       this.notificationService.error('Select a server first.');
       return;
     }
+    await this.busy.run('send', () => this.performSend(server.id));
+  }
+
+  private async performSend(serverId: string) {
+    const server = { id: serverId };
 
     // Batch mode: execute the same operation for each target
     if (this.isBatchOp() && this.batchTargets().length > 0) {
@@ -846,6 +898,7 @@ export class ExplorerComponent implements OnInit, OnDestroy {
         query_params: this.queryParams() || undefined,
       });
       this.response.set(resp);
+      this.respTab.set('body');
 
       // Auto-capture created resource IDs
       if (this.httpMethod() === 'POST' && resp.status >= 200 && resp.status < 300) {
@@ -1033,6 +1086,34 @@ export class ExplorerComponent implements OnInit, OnDestroy {
       () => this.notificationService.success('Copied to clipboard.'),
       () => this.notificationService.error('Failed to copy.')
     );
+  }
+
+  /**
+   * Inserts a discovered attribute into the request body as a top-level key.
+   * Existing keys are left alone so clicking twice cannot clobber a value the
+   * user has already typed.
+   */
+  insertAttribute(name: string) {
+    if (!this.hasBody()) {
+      this.notificationService.info('This operation does not send a body.');
+      return;
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(this.requestBody() || '{}') as Record<string, unknown>;
+    } catch {
+      this.notificationService.error('Fix the JSON in the request body first.');
+      return;
+    }
+
+    if (name in parsed) {
+      this.notificationService.info(`"${name}" is already in the body.`);
+      return;
+    }
+
+    parsed[name] = '';
+    this.requestBody.set(JSON.stringify(parsed, null, 2));
   }
 
   formatBody() {

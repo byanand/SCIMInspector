@@ -1,23 +1,19 @@
-import { Component, inject, signal, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, computed, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatSliderModule } from '@angular/material/slider';
-import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BaseChartDirective } from 'ng2-charts';
-import { ChartConfiguration, ChartData } from 'chart.js';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { LoadTestConfig, LoadTestScenario, LoadTestSummary, LoadTestProgress, LoadTestResult } from '../../models/interfaces';
+import { NavCountsService } from '../../services/nav-counts.service';
+import { BusyService } from '../../services/busy.service';
+import { UI } from '../../ui';
+import {
+  LoadTestConfig,
+  LoadTestScenario,
+  LoadTestSummary,
+  LoadTestProgress,
+  LoadTestResult,
+} from '../../models/interfaces';
 
 interface ScenarioInfo {
   id: LoadTestScenario;
@@ -25,324 +21,297 @@ interface ScenarioInfo {
   icon: string;
   description: string;
   operations: string[];
-  requestLabel: string;
 }
+
+/** Percentiles the design puts on the latency chart, in order. */
+const LATENCY_KEYS = [
+  ['min', 'min_latency_ms'],
+  ['avg', 'avg_latency_ms'],
+  ['p50', 'p50_latency_ms'],
+  ['p75', 'p75_latency_ms'],
+  ['p90', 'p90_latency_ms'],
+  ['p95', 'p95_latency_ms'],
+  ['p99', 'p99_latency_ms'],
+  ['max', 'max_latency_ms'],
+] as const;
+
+const CHART_HEIGHT = 116;
 
 @Component({
   selector: 'app-load-test',
-  standalone: true,
-  imports: [
-    CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatInputModule, MatSelectModule, MatProgressBarModule,
-    MatDividerModule, MatSliderModule, MatTabsModule, MatTooltipModule, BaseChartDirective
-  ],
+  imports: [FormsModule, MatTooltipModule, ...UI],
   templateUrl: './load-test.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
-  styleUrl: './load-test.component.scss'
+  styleUrl: './load-test.component.scss',
 })
 export class LoadTestComponent implements OnInit, OnDestroy {
-  private tauriService = inject(TauriService);
+  private readonly tauri = inject(TauriService);
+  private readonly notify = inject(NotificationService);
+  private readonly counts = inject(NavCountsService);
   readonly serverConfigService = inject(ServerConfigService);
-  private notificationService = inject(NotificationService);
+  readonly busy = inject(BusyService);
 
-  // Config form
-  totalRequests = signal(100);
-  concurrency = signal(10);
-  rampUpSeconds = signal(0);
-  selectedScenarios = signal<Set<LoadTestScenario>>(new Set(['create_users']));
+  readonly totalRequests = signal(100);
+  readonly concurrency = signal(10);
+  readonly rampUpSeconds = signal(0);
+  readonly selectedScenarios = signal<Set<LoadTestScenario>>(new Set(['create_users']));
 
-  scenarios: ScenarioInfo[] = [
+  readonly scenarios: ScenarioInfo[] = [
     {
       id: 'create_users',
       name: 'Create Users',
       icon: 'person_add',
       description: 'Create users with auto-generated SCIM data, then clean up all created users.',
-      operations: ['POST /Users', 'DELETE /Users/{id} (cleanup)'],
-      requestLabel: 'Users to create'
+      operations: ['POST /Users', 'DELETE /Users/{id}'],
     },
     {
       id: 'create_update',
       name: 'Create + Update',
       icon: 'edit',
       description: 'Create users, then update each one. Tests ID chaining from create to update.',
-      operations: ['POST /Users', 'PATCH /Users/{id}', 'DELETE /Users/{id} (cleanup)'],
-      requestLabel: 'User units (2 HTTP calls each)'
+      operations: ['POST /Users', 'PATCH /Users/{id}'],
     },
     {
       id: 'full_lifecycle',
       name: 'Full Lifecycle',
       icon: 'autorenew',
       description: 'Full CRUD per user: create, read, then delete. No separate cleanup needed.',
-      operations: ['POST /Users', 'GET /Users/{id}', 'DELETE /Users/{id}'],
-      requestLabel: 'User units (3 HTTP calls each)'
+      operations: ['POST', 'GET', 'DELETE'],
     },
     {
       id: 'list_users',
       name: 'List Users',
       icon: 'list',
       description: 'Paginated listing of users. Tests read throughput with varying startIndex.',
-      operations: ['GET /Users?startIndex=N&count=10'],
-      requestLabel: 'List requests'
+      operations: ['GET /Users?startIndex=N'],
     },
     {
       id: 'create_groups',
       name: 'Create Groups',
       icon: 'group_add',
       description: 'Create groups with auto-generated names, then clean up.',
-      operations: ['POST /Groups', 'DELETE /Groups/{id} (cleanup)'],
-      requestLabel: 'Groups to create'
+      operations: ['POST /Groups', 'DELETE /Groups/{id}'],
     },
     {
       id: 'group_lifecycle',
       name: 'Group Lifecycle',
       icon: 'sync',
       description: 'Full CRUD per group: create, read, then delete.',
-      operations: ['POST /Groups', 'GET /Groups/{id}', 'DELETE /Groups/{id}'],
-      requestLabel: 'Group units (3 HTTP calls each)'
+      operations: ['POST', 'GET', 'DELETE'],
     },
     {
       id: 'add_remove_members',
       name: 'Add/Remove Members',
       icon: 'group_add',
       description: 'Create a group and users, then add/remove each user as a member.',
-      operations: ['POST /Groups', 'POST /Users', 'PATCH /Groups/{id} (add)', 'PATCH /Groups/{id} (remove)'],
-      requestLabel: 'Users to add/remove'
+      operations: ['PATCH /Groups/{id}'],
     },
     {
       id: 'update_groups',
       name: 'Update Groups',
       icon: 'edit_note',
       description: 'Create groups, then update each with PATCH. Tests group update throughput.',
-      operations: ['POST /Groups', 'PATCH /Groups/{id}', 'DELETE /Groups/{id} (cleanup)'],
-      requestLabel: 'Group units (2 HTTP calls each)'
+      operations: ['POST /Groups', 'PATCH /Groups/{id}'],
     },
   ];
 
-  userScenarios = this.scenarios.filter(s => ['create_users', 'create_update', 'full_lifecycle', 'list_users'].includes(s.id));
-  groupScenarios = this.scenarios.filter(s => ['create_groups', 'group_lifecycle', 'add_remove_members', 'update_groups'].includes(s.id));
-
-  // State
-  running = signal(false);
-  progress = signal<LoadTestProgress | null>(null);
-  currentRunId = signal<string | null>(null);
-  results = signal<LoadTestResult[]>([]);
-  summary = signal<LoadTestSummary | null>(null);
-
-  // Chart data for latency distribution
-  latencyChartData = signal<ChartData<'bar'>>({
-    labels: [],
-    datasets: []
-  });
-
-  latencyChartOptions: ChartConfiguration<'bar'>['options'] = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      title: { display: true, text: 'Latency Distribution (ms)' }
-    },
-    scales: {
-      x: { title: { display: true, text: 'Latency (ms)' } },
-      y: { title: { display: true, text: 'Request Count' } }
-    }
-  };
-
-  // Status code pie chart
-  statusChartData = signal<ChartData<'doughnut'>>({
-    labels: [],
-    datasets: []
-  });
-
-  statusChartOptions: ChartConfiguration<'doughnut'>['options'] = {
-    responsive: true,
-    plugins: {
-      legend: { position: 'bottom' },
-      title: { display: true, text: 'Status Code Distribution' }
-    }
-  };
+  readonly running = signal(false);
+  readonly progress = signal<LoadTestProgress | null>(null);
+  readonly currentRunId = signal<string | null>(null);
+  readonly summary = signal<LoadTestSummary | null>(null);
 
   private unlistenProgress: (() => void) | null = null;
 
-  async ngOnInit() {
+  readonly scenarioCount = computed(() => this.selectedScenarios().size);
+
+  readonly configHint = computed(() => {
+    const ramp = this.rampUpSeconds();
+    const c = this.concurrency();
+    return ramp > 0
+      ? `${c} simultaneous requests, ramped over ${ramp}s.`
+      : `${c} simultaneous requests, all at once.`;
+  });
+
+  readonly progressPercent = computed(() => {
+    const p = this.progress();
+    return !p || p.total === 0 ? 0 : Math.round((p.completed / p.total) * 100);
+  });
+
+  /** The six headline figures above the charts. */
+  readonly metrics = computed(() => {
+    const s = this.summary();
+    if (!s) return [];
+    return [
+      { label: 'Requests', value: s.total_requests.toLocaleString(), color: '' },
+      { label: 'Throughput', value: `${s.requests_per_second.toFixed(1)} rps`, color: '' },
+      { label: 'Avg latency', value: `${Math.round(s.avg_latency_ms)}ms`, color: '' },
+      { label: 'p95', value: `${Math.round(s.p95_latency_ms)}ms`, color: '' },
+      { label: 'p99', value: `${Math.round(s.p99_latency_ms)}ms`, color: '' },
+      {
+        label: 'Error rate',
+        value: `${s.error_rate.toFixed(1)}%`,
+        color: s.error_rate > 0 ? 'var(--fail)' : '',
+      },
+    ];
+  });
+
+  /**
+   * Latency bars, scaled against the slowest value so the shape of the tail is
+   * legible. The design draws these in CSS rather than loading a chart library
+   * for eight bars.
+   */
+  readonly latencyBars = computed(() => {
+    const s = this.summary();
+    if (!s) return [];
+
+    const values = LATENCY_KEYS.map(([label, key]) => ({ label, value: s[key] }));
+    const max = Math.max(...values.map((v) => v.value), 1);
+
+    return values.map(({ label, value }) => ({
+      label,
+      value: `${Math.round(value)}ms`,
+      height: Math.max(2, Math.round((value / max) * CHART_HEIGHT)),
+      // The tail percentiles are what a reader is looking for, so they carry
+      // the accent while the body of the distribution stays quiet.
+      color: label === 'p95' || label === 'p99' || label === 'max' ? 'var(--accent)' : 'var(--line-2)',
+    }));
+  });
+
+  readonly statusSlices = computed(() => {
+    const s = this.summary();
+    if (!s) return [];
+
+    const dist = s.status_code_distribution ?? {};
+    const total = Object.values(dist).reduce((a, b) => a + b, 0);
+    if (total === 0) return [];
+
+    return Object.entries(dist)
+      .map(([code, count]) => ({ code: Number(code), count }))
+      .sort((a, b) => a.code - b.code)
+      .map(({ code, count }) => ({
+        code: code === 0 ? 'no response' : `HTTP ${code}`,
+        count,
+        pct: (count / total) * 100,
+        label: `${Math.round((count / total) * 100)}%`,
+        color: this.statusColor(code),
+      }));
+  });
+
+  async ngOnInit(): Promise<void> {
     await this.serverConfigService.loadConfigs();
   }
 
-  async ngOnDestroy() {
-    if (this.unlistenProgress) {
-      this.unlistenProgress();
-    }
+  ngOnDestroy(): void {
+    this.unlistenProgress?.();
   }
 
-  selectScenario(scenarioId: LoadTestScenario) {
-    this.selectedScenarios.update(set => {
+  toggleScenario(id: LoadTestScenario): void {
+    this.selectedScenarios.update((set) => {
       const next = new Set(set);
-      if (next.has(scenarioId)) {
-        next.delete(scenarioId);
+      if (next.has(id)) {
+        // Never leave the run with nothing to do.
+        if (next.size > 1) next.delete(id);
       } else {
-        next.add(scenarioId);
+        next.add(id);
       }
       return next;
     });
   }
 
-  isScenarioSelected(scenarioId: LoadTestScenario): boolean {
-    return this.selectedScenarios().has(scenarioId);
+  isScenarioSelected(id: LoadTestScenario): boolean {
+    return this.selectedScenarios().has(id);
   }
 
-  getSelectedScenarioInfo(): ScenarioInfo {
-    const first = Array.from(this.selectedScenarios())[0];
-    return this.scenarios.find(s => s.id === first) || this.scenarios[0];
-  }
-
-  async startLoadTest() {
+  async startLoadTest(): Promise<void> {
     const configId = this.serverConfigService.getSelectedId();
     if (!configId) {
-      this.notificationService.error('Please select a server profile first.');
+      this.notify.error('Please select a server profile first.');
       return;
     }
 
-    this.running.set(true);
-    this.results.set([]);
-    this.summary.set(null);
-    this.progress.set({ test_run_id: '', phase: 'Starting', completed: 0, total: this.totalRequests(), current_rps: 0, avg_latency_ms: 0, error_count: 0 });
-
-    try {
-      this.unlistenProgress = await this.tauriService.onLoadTestProgress((p: LoadTestProgress) => {
-        this.progress.set(p);
+    await this.busy.run('loadtest', async () => {
+      this.running.set(true);
+      this.summary.set(null);
+      this.progress.set({
+        test_run_id: '',
+        phase: 'Starting',
+        completed: 0,
+        total: this.totalRequests(),
+        current_rps: 0,
+        avg_latency_ms: 0,
+        error_count: 0,
       });
 
-      const selectedArr = Array.from(this.selectedScenarios());
-      const config: LoadTestConfig = {
-        server_config_id: configId,
-        total_requests: this.totalRequests(),
-        concurrency: this.concurrency(),
-        ramp_up_seconds: this.rampUpSeconds(),
-        endpoints: [],
-        scenario: selectedArr[0] || 'create_users',
-        scenarios: selectedArr.length > 1 ? selectedArr : undefined
-      };
+      try {
+        this.unlistenProgress = await this.tauri.onLoadTestProgress((p) => this.progress.set(p));
 
-      const runId = await this.tauriService.startLoadTest(config);
-      this.currentRunId.set(runId);
-      this.notificationService.success('Load test completed!');
+        const selected = Array.from(this.selectedScenarios());
+        const config: LoadTestConfig = {
+          server_config_id: configId,
+          total_requests: this.totalRequests(),
+          concurrency: this.concurrency(),
+          ramp_up_seconds: this.rampUpSeconds(),
+          endpoints: [],
+          scenario: selected[0] ?? 'create_users',
+          scenarios: selected.length > 1 ? selected : undefined,
+        };
 
-      // Load results
-      const loadedResults = await this.tauriService.getLoadTestResults(runId);
-      this.results.set(loadedResults);
-      this.summary.set(this.computeLoadTestSummary(loadedResults));
+        const runId = await this.tauri.startLoadTest(config);
+        this.currentRunId.set(runId);
 
-      this.buildCharts(loadedResults);
-    } catch (err: any) {
-      this.notificationService.error('Load test failed: ' + (err?.message || err));
-    } finally {
-      this.running.set(false);
-      if (this.unlistenProgress) {
-        this.unlistenProgress();
+        const results = await this.tauri.getLoadTestResults(runId);
+        this.summary.set(this.computeSummary(results));
+        await this.counts.refreshRuns();
+        this.notify.success('Load test completed.');
+      } catch (err) {
+        this.notify.error('Load test failed: ' + this.message(err));
+      } finally {
+        this.running.set(false);
+        this.progress.set(null);
+        this.unlistenProgress?.();
         this.unlistenProgress = null;
       }
-    }
+    });
   }
 
-  async stopLoadTest() {
+  async stopLoadTest(): Promise<void> {
     const runId = this.currentRunId();
-    if (runId) {
-      try {
-        await this.tauriService.stopLoadTest(runId);
-        this.notificationService.info('Load test stopped.');
-      } catch (err: any) {
-        this.notificationService.error('Error stopping test: ' + (err?.message || err));
-      }
+    if (!runId) return;
+    try {
+      await this.tauri.stopLoadTest(runId);
+      this.notify.info('Load test stopped.');
+    } catch (err) {
+      this.notify.error('Error stopping test: ' + this.message(err));
     }
   }
 
-  getProgressPercent(): number {
-    const p = this.progress();
-    if (!p || p.total === 0) return 0;
-    return Math.round((p.completed / p.total) * 100);
+  private statusColor(code: number): string {
+    if (code >= 200 && code < 300) return 'var(--pass)';
+    if (code >= 300 && code < 500) return 'var(--warn)';
+    return 'var(--fail)';
   }
 
-  private buildCharts(results: LoadTestResult[]) {
-    // Latency histogram
-    const durations = results.map(r => r.duration_ms);
-    if (durations.length === 0) return;
-
-    const maxDuration = Math.max(...durations);
-    const bucketCount = 20;
-    const bucketSize = Math.ceil(maxDuration / bucketCount);
-    const buckets = new Array(bucketCount).fill(0);
-    const labels: string[] = [];
-
-    for (let i = 0; i < bucketCount; i++) {
-      labels.push(`${i * bucketSize}-${(i + 1) * bucketSize}`);
-    }
-
-    for (const d of durations) {
-      const idx = Math.min(Math.floor(d / bucketSize), bucketCount - 1);
-      buckets[idx]++;
-    }
-
-    this.latencyChartData.set({
-      labels,
-      datasets: [{
-        data: buckets,
-        backgroundColor: '#42a5f5',
-        borderRadius: 4
-      }]
-    });
-
-    // Status code doughnut
-    const statusCounts = new Map<number, number>();
-    for (const r of results) {
-      const code = r.status_code ?? 0;
-      statusCounts.set(code, (statusCounts.get(code) || 0) + 1);
-    }
-
-    const statusLabels = Array.from(statusCounts.keys()).sort().map(s => `HTTP ${s}`);
-    const statusData = Array.from(statusCounts.keys()).sort().map(s => statusCounts.get(s)!);
-    const statusColors = Array.from(statusCounts.keys()).sort().map(s => {
-      if (s >= 200 && s < 300) return '#4caf50';
-      if (s >= 300 && s < 400) return '#ff9800';
-      if (s >= 400 && s < 500) return '#f44336';
-      return '#9c27b0';
-    });
-
-    this.statusChartData.set({
-      labels: statusLabels,
-      datasets: [{
-        data: statusData,
-        backgroundColor: statusColors
-      }]
-    });
-  }
-
-  private computeLoadTestSummary(results: LoadTestResult[]): LoadTestSummary {
+  private computeSummary(results: LoadTestResult[]): LoadTestSummary {
     const total = results.length;
     if (total === 0) {
       return {
         total_requests: 0, successful: 0, failed: 0, error_rate: 0,
         total_duration_ms: 0, min_latency_ms: 0, max_latency_ms: 0,
-        avg_latency_ms: 0, p50_latency_ms: 0, p75_latency_ms: 0, p90_latency_ms: 0, p95_latency_ms: 0,
-        p99_latency_ms: 0, requests_per_second: 0, status_code_distribution: {}
+        avg_latency_ms: 0, p50_latency_ms: 0, p75_latency_ms: 0, p90_latency_ms: 0,
+        p95_latency_ms: 0, p99_latency_ms: 0, requests_per_second: 0,
+        status_code_distribution: {},
       };
     }
 
-    const successful = results.filter(r => r.success).length;
+    const successful = results.filter((r) => r.success).length;
     const failed = total - successful;
-    const error_rate = (failed / total) * 100;
 
-    const durations = results.map(r => r.duration_ms).sort((a, b) => a - b);
-    const total_duration_ms = durations.reduce((a, b) => a + b, 0);
-    const min_latency_ms = durations[0];
-    const max_latency_ms = durations[durations.length - 1];
-    const avg_latency_ms = total_duration_ms / total;
-    const p50_latency_ms = durations[Math.floor(total * 0.5)];
-    const p75_latency_ms = durations[Math.floor(total * 0.75)];
-    const p90_latency_ms = durations[Math.floor(total * 0.90)];
-    const p95_latency_ms = durations[Math.floor(total * 0.95)];
-    const p99_latency_ms = durations[Math.min(Math.floor(total * 0.99), total - 1)];
+    const durations = results.map((r) => r.duration_ms).sort((a, b) => a - b);
+    const sum = durations.reduce((a, b) => a + b, 0);
+    const at = (q: number) => durations[Math.min(Math.floor(total * q), total - 1)];
 
-    const timestamps = results.map(r => new Date(r.timestamp).getTime());
+    const timestamps = results.map((r) => new Date(r.timestamp).getTime());
     const timeSpan = Math.max(...timestamps) - Math.min(...timestamps);
-    const requests_per_second = timeSpan > 0 ? (total / (timeSpan / 1000)) : total;
 
     const status_code_distribution: Record<number, number> = {};
     for (const r of results) {
@@ -351,10 +320,25 @@ export class LoadTestComponent implements OnInit, OnDestroy {
     }
 
     return {
-      total_requests: total, successful, failed, error_rate,
-      total_duration_ms, min_latency_ms, max_latency_ms, avg_latency_ms,
-      p50_latency_ms, p75_latency_ms, p90_latency_ms, p95_latency_ms, p99_latency_ms,
-      requests_per_second, status_code_distribution
+      total_requests: total,
+      successful,
+      failed,
+      error_rate: (failed / total) * 100,
+      total_duration_ms: sum,
+      min_latency_ms: durations[0],
+      max_latency_ms: durations[total - 1],
+      avg_latency_ms: sum / total,
+      p50_latency_ms: at(0.5),
+      p75_latency_ms: at(0.75),
+      p90_latency_ms: at(0.9),
+      p95_latency_ms: at(0.95),
+      p99_latency_ms: at(0.99),
+      requests_per_second: timeSpan > 0 ? total / (timeSpan / 1000) : total,
+      status_code_distribution,
     };
+  }
+
+  private message(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
   }
 }

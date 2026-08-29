@@ -1,225 +1,179 @@
-<div class="field-mapping">
-  @if (serverConfigService.getSelectedId()) {
-    <!-- Quick Add from Presets -->
-    <mat-card class="presets-card">
-      <mat-card-header>
-        <mat-card-title>Add Common SCIM Attributes</mat-card-title>
-        <button mat-button color="primary" (click)="addCustom()">
-          <mat-icon>edit</mat-icon> Custom Attribute
-        </button>
-      </mat-card-header>
-      <mat-card-content>
-        @if (availablePresets().length > 0) {
-          <div class="preset-chips">
-            @for (preset of availablePresets(); track preset.attribute) {
-              <button mat-stroked-button class="preset-chip"
-                (click)="addFromPreset(preset)"
-                [matTooltip]="preset.description">
-                <mat-icon class="preset-icon">{{ preset.suggestedFormat === 'email' ? 'email' : preset.suggestedFormat === 'phone' ? 'phone' : 'data_object' }}</mat-icon>
-                {{ preset.displayName }}
-              </button>
-            }
-          </div>
-        } @else {
-          <p class="all-added-msg">All common attributes have been added. Use "Custom Attribute" for others.</p>
-        }
+<ng-template appPageActions>
+  <app-button icon="schema" busyKey="discover" busyLabel="Discovering…" (press)="discover()">
+    Discover from server
+  </app-button>
+  <app-button icon="add" kind="primary" (press)="addCustom()">New rule</app-button>
+</ng-template>
 
-        <!-- From Server Schema — auto-populated from the global ScimSchemaService cache -->
-        <mat-divider class="schema-divider"></mat-divider>
-        <div class="server-schema-section">
-          <div class="server-schema-header">
-            <div class="server-schema-title">
-              <mat-icon>schema</mat-icon>
-              <span>From Server Schema</span>
-              @if (scimSchemaService.schemaStatus() === 'loaded') {
-                <span class="schema-count-badge">{{ scimSchemaService.schemaCount() }} schemas loaded</span>
-              }
-            </div>
-            <div class="server-schema-actions">
-              @if (scimSchemaService.schemaStatus() === 'loading') {
-                <mat-spinner diameter="18"></mat-spinner>
-              }
-              @if (scimSchemaService.schemaStatus() === 'loaded' || scimSchemaService.schemaStatus() === 'error') {
-                <button mat-icon-button (click)="scimSchemaService.refreshSchemas()" matTooltip="Refresh schemas from server">
-                  <mat-icon>refresh</mat-icon>
-                </button>
-              }
-              @if (availableDiscovered().length > 0) {
-                <button mat-stroked-button color="primary" (click)="addAllDiscovered()" [disabled]="loading()"
-                  matTooltip="Add all discovered attributes as rules">
-                  <mat-icon>playlist_add</mat-icon>
-                  Add All ({{ availableDiscovered().length }})
-                </button>
-              }
-            </div>
-          </div>
+<div class="page">
+  <div class="main">
+    @if (editingRule(); as draft) {
+      <app-panel [title]="draft.id ? 'Edit rule' : 'New rule'">
+        <div class="editor">
+          <div class="f-grid">
+            <label class="f-field f-span">
+              <span class="f-label req">SCIM attribute</span>
+              <input
+                class="f-input mono"
+                [ngModel]="draft.scim_attribute"
+                (ngModelChange)="patchDraft('scim_attribute', $event)"
+                placeholder="emails[0].value" />
+              <span class="f-hint">Exact wire path, including any extension URN prefix.</span>
+            </label>
 
-          @if (scimSchemaService.schemaStatus() === 'idle') {
-            <p class="schema-hint">Select a server profile to load schema attributes automatically.</p>
-          } @else if (scimSchemaService.schemaStatus() === 'loading') {
-            <p class="schema-hint">Loading schemas from server...</p>
-          } @else if (scimSchemaService.schemaStatus() === 'error') {
-            <p class="schema-hint schema-error">Could not load schemas: {{ scimSchemaService.errorMessage() }}</p>
-          } @else if (availableDiscovered().length > 0) {
-            <div class="discovered-chips">
-              @for (attr of availableDiscovered(); track attr.schema_urn + attr.attr_name) {
-                <button mat-stroked-button class="discovered-chip"
-                  (click)="addFromDiscovered(attr)"
-                  [matTooltip]="attr.schema_name + ' — ' + attr.attr_type">
-                  <mat-icon class="disc-icon">schema</mat-icon>
-                  {{ discoveredDisplayName(attr) }}
-                  <span class="disc-type-badge">{{ attr.attr_type }}</span>
-                </button>
-              }
-            </div>
-          } @else {
-            <p class="all-added-msg">All schema attributes have been added as rules.</p>
-          }
-        </div>
-      </mat-card-content>
-    </mat-card>
+            <label class="f-field">
+              <span class="f-label req">Display name</span>
+              <input
+                class="f-input"
+                [ngModel]="draft.display_name"
+                (ngModelChange)="patchDraft('display_name', $event)"
+                placeholder="Primary Email" />
+            </label>
 
-
-
-    <!-- Editor Panel -->
-    @if (editingRule()) {
-      <mat-card class="editor-card">
-        <mat-card-header>
-          <mat-card-title>{{ editingRule()!.id ? 'Edit Rule' : 'New Rule' }}</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="editor-grid">
-            <mat-form-field appearance="outline">
-              <mat-label>SCIM Attribute Path</mat-label>
-              <input matInput [ngModel]="editingRule()!.scim_attribute"
-                (ngModelChange)="editingRule.set({...editingRule()!, scim_attribute: $event})"
-                placeholder="userName or emails[0].value">
-              <mat-hint>Dot-notation for nested: name.givenName</mat-hint>
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Display Name</mat-label>
-              <input matInput [ngModel]="editingRule()!.display_name"
-                (ngModelChange)="editingRule.set({...editingRule()!, display_name: $event})"
-                placeholder="User Name">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Format Validation</mat-label>
-              <mat-select [ngModel]="editingRule()!.format"
-                (ngModelChange)="editingRule.set({...editingRule()!, format: $event})">
-                @for (fmt of formatOptions; track fmt.value) {
-                  <mat-option [value]="fmt.value">
-                    {{ fmt.label }}
-                    <span class="format-desc"> — {{ fmt.description }}</span>
-                  </mat-option>
+            <label class="f-field">
+              <span class="f-label">Format</span>
+              <select
+                class="f-select"
+                [ngModel]="draft.format"
+                (ngModelChange)="patchDraft('format', $event)">
+                @for (f of formatOptions; track f.value) {
+                  <option [value]="f.value">{{ f.label }}</option>
                 }
-              </mat-select>
-              <mat-hint>Choose a format to validate against</mat-hint>
-            </mat-form-field>
+              </select>
+            </label>
 
-            @if (editingRule()!.format === 'regex') {
-              <mat-form-field appearance="outline">
-                <mat-label>Regex Pattern</mat-label>
-                <input matInput [ngModel]="editingRule()!.regex_pattern"
-                  (ngModelChange)="editingRule.set({...editingRule()!, regex_pattern: $event})"
-                  placeholder="^[A-Z]{2,}$">
-                <mat-hint>Pattern must match the entire value</mat-hint>
-              </mat-form-field>
+            @if (draft.format === 'regex') {
+              <label class="f-field f-span">
+                <span class="f-label req">Regex pattern</span>
+                <input
+                  class="f-input mono"
+                  [ngModel]="draft.regex_pattern"
+                  (ngModelChange)="patchDraft('regex_pattern', $event)"
+                  placeholder="^[A-Z]{2}-\d{4}$" />
+              </label>
             }
+
+            <label class="f-field f-span">
+              <span class="f-label">Note</span>
+              <input
+                class="f-input"
+                [ngModel]="draft.description"
+                (ngModelChange)="patchDraft('description', $event)"
+                placeholder="Optional" />
+            </label>
           </div>
 
-          <div class="editor-row">
-            <mat-checkbox [checked]="editingRule()!.required || false"
-              (change)="editingRule.set({...editingRule()!, required: $event.checked})">
-              Required — must be present in SCIM responses
-            </mat-checkbox>
-          </div>
-
-          <mat-form-field appearance="outline" class="description-field">
-            <mat-label>Notes (optional)</mat-label>
-            <textarea matInput rows="2" [ngModel]="editingRule()!.description"
-              (ngModelChange)="editingRule.set({...editingRule()!, description: $event})"
-              placeholder="e.g., Our IdP requires userName to be email format"></textarea>
-          </mat-form-field>
+          <app-checkbox
+            [checked]="!!draft.required"
+            (toggled)="patchDraft('required', $event)">
+            Required — must be present in responses
+          </app-checkbox>
 
           <div class="editor-actions">
-            <button mat-raised-button color="primary" (click)="saveRule()">
-              <mat-icon>save</mat-icon> Save Rule
-            </button>
-            <button mat-button (click)="cancelEdit()">Cancel</button>
+            <app-button (press)="cancelEdit()">Cancel</app-button>
+            <app-button kind="primary" (press)="saveRule()">Save rule</app-button>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </div>
+      </app-panel>
     }
 
-    <!-- Current Rules Table -->
-    <mat-card class="rules-card">
-      <mat-card-header>
-        <mat-card-title>Active Rules ({{ rules().length }})</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        @if (rules().length > 0) {
-          <table mat-table [dataSource]="rules()" class="rules-table">
-            <ng-container matColumnDef="scim_attribute">
-              <th mat-header-cell *matHeaderCellDef>SCIM Attribute</th>
-              <td mat-cell *matCellDef="let rule">
-                <code class="attr-path">{{ rule.scim_attribute }}</code>
-              </td>
-            </ng-container>
+    <app-panel [flush]="true">
+      @if (ruleRows().length === 0) {
+        <app-empty-state
+          icon="rule"
+          title="No rules yet"
+          detail="Rules enforce required attributes and formats during validation runs.">
+          <app-button icon="add" kind="primary" (press)="addCustom()">New rule</app-button>
+        </app-empty-state>
+      } @else {
+        <div class="thead">
+          <span class="c-attr">Attribute</span>
+          <span class="c-name">Display name</span>
+          <span class="c-req">Required</span>
+          <span class="c-fmt">Format</span>
+          <span class="c-act"></span>
+        </div>
 
-            <ng-container matColumnDef="display_name">
-              <th mat-header-cell *matHeaderCellDef>Display Name</th>
-              <td mat-cell *matCellDef="let rule">{{ rule.display_name }}</td>
-            </ng-container>
-
-            <ng-container matColumnDef="required">
-              <th mat-header-cell *matHeaderCellDef>Required</th>
-              <td mat-cell *matCellDef="let rule">
-                @if (rule.required) {
-                  <span class="required-badge">Required</span>
-                } @else {
-                  <span class="optional-badge">Optional</span>
-                }
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="format">
-              <th mat-header-cell *matHeaderCellDef>Format</th>
-              <td mat-cell *matCellDef="let rule">
-                <div class="format-cell">
-                  <mat-icon class="format-icon">{{ getFormatIcon(rule.format) }}</mat-icon>
-                  <span>{{ getFormatLabel(rule.format) }}</span>
-                  @if (rule.format === 'regex' && rule.regex_pattern) {
-                    <code class="regex-preview" [matTooltip]="rule.regex_pattern">{{ rule.regex_pattern }}</code>
-                  }
-                </div>
-              </td>
-            </ng-container>
-
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef></th>
-              <td mat-cell *matCellDef="let rule">
-                <button mat-icon-button (click)="editRule(rule)" matTooltip="Edit rule">
-                  <mat-icon>edit</mat-icon>
-                </button>
-                <button mat-icon-button color="warn" (click)="deleteRule(rule)" matTooltip="Delete rule">
-                  <mat-icon>delete</mat-icon>
-                </button>
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-          </table>
-        } @else {
-          <div class="empty-rules">
-            <mat-icon>rule</mat-icon>
-            <p>No field mapping rules yet. Click an attribute above or add a custom one.</p>
-            <p class="hint">Rules will be checked during SCIM Validation runs against the selected server.</p>
+        @for (r of ruleRows(); track r.id) {
+          <div class="trow">
+            <span class="c-attr mono" [matTooltip]="r.scim_attribute">{{ r.scim_attribute }}</span>
+            <span class="c-name">{{ r.display_name }}</span>
+            <span class="c-req">
+              <app-status-chip [tone]="r.required ? 'fail' : 'neutral'">
+                {{ r.required ? 'required' : 'optional' }}
+              </app-status-chip>
+            </span>
+            <span class="c-fmt">
+              <span class="ms" aria-hidden="true">{{ r.formatIcon }}</span>
+              {{ r.formatLabel }}
+            </span>
+            <span class="c-act">
+              <button type="button" matTooltip="Edit" (click)="editRule(r)">
+                <span class="ms" aria-hidden="true">edit</span>
+              </button>
+              <button type="button" matTooltip="Delete" (click)="deleteRule(r)">
+                <span class="ms" aria-hidden="true">delete</span>
+              </button>
+            </span>
           </div>
         }
-      </mat-card-content>
-    </mat-card>
-  }
+
+        <div class="tfoot">
+          <span class="ms" aria-hidden="true">info</span>
+          Rules are checked during validation runs against the active server.
+        </div>
+      }
+    </app-panel>
+  </div>
+
+  <aside class="side">
+    <app-panel [flush]="true">
+      <div class="side-head">
+        <span class="ms schema" aria-hidden="true">schema</span>
+        <span class="side-title">From server schema</span>
+        <span class="side-count">{{ scimSchemaService.schemaCount() }} loaded</span>
+      </div>
+
+      <div class="side-body">
+        @if (availableDiscovered().length === 0) {
+          <p class="side-empty">
+            @if (scimSchemaService.schemaCount() === 0) {
+              No schemas discovered yet. Run “Discover from server”.
+            } @else {
+              Every discovered attribute already has a rule.
+            }
+          </p>
+        } @else {
+          @for (d of availableDiscovered(); track d.schema_urn + d.attr_name) {
+            <button type="button" class="discovered" (click)="addFromDiscovered(d)">
+              <span class="ms" aria-hidden="true">add</span>
+              <span class="d-name mono">{{ d.attr_name }}</span>
+              <span class="d-type mono">{{ d.attr_type }}</span>
+            </button>
+          }
+          <button type="button" class="add-all" (click)="addAllDiscovered()">
+            Add all {{ availableDiscovered().length }}
+          </button>
+        }
+      </div>
+    </app-panel>
+
+    <app-panel title="Common attributes">
+      @if (availablePresets().length === 0) {
+        <p class="side-empty">All common attributes have rules.</p>
+      } @else {
+        <div class="presets">
+          @for (p of availablePresets(); track p.attribute) {
+            <button
+              type="button"
+              class="preset mono"
+              [matTooltip]="p.description"
+              (click)="addFromPreset(p)">
+              {{ p.attribute }}
+            </button>
+          }
+        </div>
+      }
+    </app-panel>
+  </aside>
 </div>

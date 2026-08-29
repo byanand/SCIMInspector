@@ -1,87 +1,204 @@
-.dashboard {
-  padding: 32px;
-}
-
-h1 {
-  margin-bottom: 32px;
-  font-weight: 300;
-  font-size: 28px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  margin-bottom: 28px;
-}
-
-.stat-card {
-  text-align: center;
-
-  mat-card-content {
-    padding-top: 16px;
-  }
-}
-
-.stat-icon {
-  font-size: 36px;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 8px;
-}
-
-.stat-value {
-  font-size: 32px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.stat-label {
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-.recent-runs-card {
-  margin-top: 8px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 32px;
-  opacity: 0.6;
-  font-size: 16px;
-}
-
-.runs-list {
+.page {
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px;
+  max-width: 1180px;
 }
 
-.run-item {
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.link {
+  font-size: 11.5px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+// ── Recent runs ──────────────────────────────────────────────────────────────
+.run {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: background 0.2s;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink);
+
+  &:last-child {
+    border-bottom: none;
+  }
 
   &:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: var(--panel-2);
+  }
+
+  > .ms {
+    font-size: 18px;
+    color: var(--ink-3);
+    flex-shrink: 0;
   }
 }
 
-.run-info {
+.run-main {
+  min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-.run-type {
+.run-title {
+  font-size: 12.5px;
   font-weight: 500;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.run-date {
+.run-meta {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-summary {
+  font-size: 11px;
+  color: var(--ink-2);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ── Category bars ────────────────────────────────────────────────────────────
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.bar-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.bar-name {
+  font-size: 11.5px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-ratio {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.bar-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+}
+
+.muted {
+  margin: 0;
   font-size: 12px;
-  opacity: 0.6;
+  color: var(--ink-3);
+}
+
+// ── Next step ────────────────────────────────────────────────────────────────
+// The one accent-tinted surface on the screen, so the recommended action reads
+// as the exception rather than as another panel.
+.next {
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  padding: 14px 16px;
+}
+
+.next-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+
+  .ms {
+    font-size: 17px;
+    color: var(--accent);
+  }
+}
+
+.next p {
+  margin: 0 0 11px;
+  font-size: 12px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.next-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 500;
+
+  &:hover {
+    background: var(--accent-hover);
+    color: var(--accent-ink);
+  }
+
+  .ms {
+    font-size: 16px;
+  }
+}
+
+// ── Narrow ───────────────────────────────────────────────────────────────────
+@media (max-width: 1100px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .split {
+    grid-template-columns: 1fr;
+  }
 }

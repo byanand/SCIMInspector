@@ -1,297 +1,345 @@
-:host {
+.page {
+  padding: 20px 24px 28px;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
-  width: 100%;
-  overflow: hidden;
+  gap: 14px;
+  max-width: 1180px;
 }
 
-.sample-data-container {
-  padding: 24px;
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+app-tabs {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: -1px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-
-  h2 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 500;
-  }
-
-  .subtitle {
-    margin: 4px 0 0;
-    color: rgba(0, 0, 0, 0.6);
-    font-size: 14px;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-}
-
-.info-card {
-  mat-card-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 24px;
-    color: rgba(0, 0, 0, 0.6);
-
-    mat-icon {
-      color: #1976d2;
-    }
-  }
-}
-
-.editor-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-
-  .editor-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-
-    h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-    }
-
-    .editor-panel-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-  }
-
-  .editor-meta-row {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: 8px;
-
-    .name-field {
-      flex: 1;
-    }
-
-    .type-field {
-      width: 140px;
-    }
-  }
-
-  .json-error {
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: #ffebee;
-    color: #c62828;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: monospace;
-  }
-
-  .monaco-wrapper {
-    flex: 1;
-    min-height: 0;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 8px;
-    overflow: hidden;
-    position: relative;
-
-    ngx-monaco-editor {
-      display: block;
-      height: 100% !important;
-      width: 100%;
-    }
-
-    ::ng-deep .editor-container {
-      height: 100% !important;
-    }
-  }
-}
-
-.schema-status-hint {
+// ── Undo banner ──────────────────────────────────────────────────────────────
+// A deletion is reversible for as long as the banner is up, which is why the
+// confirm step can stay lightweight.
+.undo {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.5);
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
 
-  .schema-hint-icon {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
-    color: #1976d2;
-  }
-
-  kbd {
-    background: rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    border-radius: 3px;
-    padding: 0 4px;
-    font-size: 10px;
-    font-family: monospace;
+  > .ms {
+    font-size: 18px;
+    color: var(--ink-3);
   }
 }
 
-.loading-state {
+.undo-text {
+  font-size: 12.5px;
+}
+
+.undo-go {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.undo-x {
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 48px;
-  color: rgba(0, 0, 0, 0.6);
-}
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 48px;
-  color: rgba(0, 0, 0, 0.4);
-
-  mat-icon {
-    font-size: 48px;
-    height: 48px;
-    width: 48px;
-  }
-
-  p {
-    margin: 0;
-    font-size: 14px;
+  .ms {
+    font-size: 17px;
   }
 }
 
-.data-grid {
+// ── Cards ────────────────────────────────────────────────────────────────────
+.grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-  padding: 16px 0;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
 }
 
-.data-card {
-  .type-icon {
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  &.editing {
+    border-color: var(--accent);
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.head-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.name-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: Archivo, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  outline: none;
+}
+
+.tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+
+  &.default {
+    background: var(--pass-soft);
+    color: var(--pass);
+  }
+
+  &.editing {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
+
+// ── JSON panes ───────────────────────────────────────────────────────────────
+.json-read,
+.json-edit {
+  margin: 0;
+  flex: 1;
+  padding: 12px 14px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10.5px;
+  line-height: 1.55;
+  background: var(--code-bg);
+  color: var(--code-ink);
+}
+
+.json-read {
+  overflow: auto;
+  max-height: 170px;
+}
+
+.json-edit {
+  min-height: 170px;
+  border: none;
+  // The accent edge marks which card owns the keyboard focus.
+  border-left: 2px solid var(--accent);
+  resize: vertical;
+  outline: none;
+  width: 100%;
+}
+
+// ── Editor footer ────────────────────────────────────────────────────────────
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+
+  .ms {
+    font-size: 15px;
+    color: var(--fail);
+
+    &.ok {
+      color: var(--pass);
+    }
+  }
+}
+
+.foot-text {
+  font-size: 11px;
+  color: var(--ink-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.bad {
+    color: var(--fail);
+  }
+}
+
+.text-btn {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:disabled {
+    opacity: 0.42;
+    cursor: default;
+  }
+}
+
+// ── Read-mode tools ──────────────────────────────────────────────────────────
+.tools {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+
+  button {
+    border: none;
+    background: transparent;
+    color: var(--ink-3);
+    padding: 3px;
+    cursor: pointer;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    font-size: 20px;
-
-    &.user-icon {
-      background: #e3f2fd;
-      color: #1565c0;
-    }
-
-    &.group-icon {
-      background: #f3e5f5;
-      color: #7b1fa2;
-    }
-  }
-
-  .default-badge {
-    font-size: 14px;
-    height: 14px;
-    width: 14px;
-    color: #2e7d32;
-    vertical-align: text-bottom;
-    margin-right: 2px;
-  }
-
-  .json-preview {
-    font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 11px;
-    line-height: 1.4;
-    background: #f5f5f5;
-    padding: 8px;
     border-radius: 4px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 120px;
-    overflow: hidden;
-    color: rgba(0, 0, 0, 0.7);
-    margin: 0;
+
+    &:hover {
+      color: var(--ink);
+      background: var(--panel-2);
+    }
+
+    .ms {
+      font-size: 17px;
+    }
   }
 }
 
-// ── Dark theme ──
-:host-context(.dark-theme) {
-  .page-header .subtitle {
-    color: rgba(255, 255, 255, 0.6);
+// ── Delete confirmation ──────────────────────────────────────────────────────
+.confirm {
+  padding: 12px 14px;
+  border-top: 1px solid var(--fail);
+  background: var(--fail-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.confirm-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+
+  .ms {
+    font-size: 17px;
+    color: var(--fail);
+    flex-shrink: 0;
   }
+}
 
-  .info-card mat-card-content {
-    color: rgba(255, 255, 255, 0.6);
+.confirm-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.confirm-note {
+  font-size: 11px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.ghost-btn,
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+
+  .ms {
+    font-size: 14px;
   }
+}
 
-  .editor-panel {
-    .json-error {
-      background: #4e342e;
-      color: #ffab91;
-    }
+.ghost-btn {
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--ink);
+}
 
-    .monaco-wrapper {
-      border-color: rgba(255, 255, 255, 0.12);
-    }
+.danger-btn {
+  border: none;
+  background: var(--fail);
+  color: var(--panel);
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .loading-state,
-  .empty-state {
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .data-card {
-    .type-icon {
-      &.user-icon {
-        background: rgba(25, 118, 210, 0.15);
-        color: #90caf9;
-      }
-
-      &.group-icon {
-        background: rgba(123, 31, 162, 0.15);
-        color: #ce93d8;
-      }
-    }
-
-    .default-badge {
-      color: #66bb6a;
-    }
-
-    .json-preview {
-      background: #1e1e1e;
-      color: rgba(255, 255, 255, 0.7);
-    }
-  }
-
-  .schema-status-hint {
-    color: rgba(255, 255, 255, 0.4);
-
-    .schema-hint-icon {
-      color: #90caf9;
-    }
-
-    kbd {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.12);
-    }
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
   }
 }

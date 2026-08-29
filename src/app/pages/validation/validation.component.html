@@ -1,312 +1,237 @@
-<div class="validation">
-  <div class="header">
-    <button mat-raised-button color="primary" (click)="runValidation()" [disabled]="running() || !serverConfigService.selectedConfig()">
-      <mat-icon>{{ running() ? 'hourglass_empty' : 'play_arrow' }}</mat-icon>
-      {{ running() ? 'Running...' : 'Run Validation' }}
+<ng-template appPageActions>
+  @if (currentRunId()) {
+    <app-button icon="download" busyKey="export" busyLabel="Exporting…" (press)="exportResults()">
+      Export
+    </app-button>
+  }
+  <app-button
+    icon="play_arrow"
+    kind="primary"
+    busyKey="validation"
+    busyLabel="Running…"
+    (press)="runValidation()">
+    Run validation
+  </app-button>
+</ng-template>
+
+<div class="page">
+  <!-- ── Score strip ────────────────────────────────────────────────────── -->
+  @if (summary(); as s) {
+    <div class="score">
+      <div class="score-main">
+        <div class="m-label">Compliance</div>
+        <div class="score-figure">
+          <span class="score-value tnum">{{ s.compliance_score.toFixed(1) }}</span>
+          <span class="score-unit">%</span>
+        </div>
+      </div>
+      @for (v of scoreStats(); track v.label) {
+        <div class="score-stat">
+          <div class="m-label">{{ v.label }}</div>
+          <div class="score-sub tnum" [style.color]="v.color || null">{{ v.value }}</div>
+        </div>
+      }
+      <div class="score-meta">
+        <div>{{ serverConfigService.selectedConfig()?.name }}</div>
+        <div class="muted">{{ s.total }} tests run</div>
+      </div>
+    </div>
+  }
+
+  <!-- ── Run configuration ──────────────────────────────────────────────── -->
+  <div class="config">
+    <button type="button" class="config-head" (click)="toggleConfig()">
+      <span class="ms" aria-hidden="true">tune</span>
+      <span class="config-title">Run configuration</span>
+      <span class="config-note">{{ configSummary() }}</span>
+      <span class="ms chev" aria-hidden="true">
+        {{ configOpen() ? 'expand_less' : 'expand_more' }}
+      </span>
     </button>
-    @if (running()) {
-      <button mat-stroked-button color="warn" (click)="stopValidation()" [disabled]="stopping()">
-        <mat-icon>stop</mat-icon> {{ stopping() ? 'Stopping...' : 'Stop' }}
-      </button>
+
+    @if (configOpen()) {
+      <div class="config-body">
+        <div class="f-grid joins">
+          <label class="f-field">
+            <span class="f-label">User joining property</span>
+            <select
+              class="f-select mono"
+              [ngModel]="userJoiningProperty()"
+              (ngModelChange)="userJoiningProperty.set($event)">
+              <option value="userName">userName</option>
+              <option value="externalId">externalId</option>
+              <option value="emails[0].value">emails[0].value</option>
+            </select>
+          </label>
+          <label class="f-field">
+            <span class="f-label">Group joining property</span>
+            <select
+              class="f-select mono"
+              [ngModel]="groupJoiningProperty()"
+              (ngModelChange)="groupJoiningProperty.set($event)">
+              <option value="displayName">displayName</option>
+              <option value="externalId">externalId</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="cats">
+          @for (c of categories(); track c.key; let i = $index) {
+            <app-checkbox [checked]="c.enabled" (toggled)="toggleCategory(i)">
+              {{ c.label }}
+            </app-checkbox>
+          }
+        </div>
+      </div>
     }
   </div>
 
-  <!-- Category Selection -->
-  <mat-card class="categories-card">
-    <mat-card-header>
-      <mat-card-title>Test Categories</mat-card-title>
-      <div class="toggle-all">
-        <button mat-button (click)="toggleAll(true)">Select All</button>
-        <button mat-button (click)="toggleAll(false)">Deselect All</button>
+  <!-- ── Live progress ──────────────────────────────────────────────────── -->
+  @if (running() && progress(); as p) {
+    <div class="live">
+      <span class="live-phase">Running</span>
+      <span class="live-name">{{ p.current_test }}</span>
+      <div class="live-track">
+        <div class="live-fill" [style.width.%]="progressPercent()"></div>
       </div>
-    </mat-card-header>
-    <mat-card-content>
-      <!-- Joining Property Configuration -->
-      <div class="joining-property-section">
-        <div class="joining-property-header">
-          <mat-icon>link</mat-icon>
-          <span class="joining-property-label">Joining Properties</span>
-          <span class="joining-property-hint">The unique attribute used to match resources (like Microsoft Entra ID matching attribute)</span>
-        </div>
-        <div class="joining-property-grid">
-          <mat-form-field appearance="outline">
-            <mat-label>User Joining Property</mat-label>
-            <mat-select [ngModel]="userJoiningProperty()" (ngModelChange)="userJoiningProperty.set($event)">
-              <mat-option value="userName">userName</mat-option>
-              <mat-option value="externalId">externalId</mat-option>
-              <mat-option value="emails[0].value">emails[0].value</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Group Joining Property</mat-label>
-            <mat-select [ngModel]="groupJoiningProperty()" (ngModelChange)="groupJoiningProperty.set($event)">
-              <mat-option value="displayName">displayName</mat-option>
-              <mat-option value="externalId">externalId</mat-option>
-            </mat-select>
-          </mat-form-field>
-        </div>
-      </div>
-
-      <mat-divider></mat-divider>
-
-      <div class="category-grid">
-        @for (cat of categories(); track cat.key; let i = $index) {
-          <mat-checkbox [checked]="cat.enabled" (change)="toggleCategory(i)">
-            {{ cat.label }}
-          </mat-checkbox>
-        }
-      </div>
-
-      <!-- Custom Schema Discovery -->
-      <div class="custom-schema-section">
-        <div class="custom-schema-header">
-          <button mat-stroked-button color="primary" (click)="discoverCustomAttributes()" [disabled]="discoveryLoading()">
-            <mat-icon>{{ discoveryLoading() ? 'hourglass_empty' : 'search' }}</mat-icon>
-            <span>{{ discoveryLoading() ? 'Discovering...' : 'Discover Custom Attributes' }}</span>
-          </button>
-          <span class="custom-schema-hint">Fetches extension schemas from /Schemas endpoint</span>
-        </div>
-
-        @if (discoveryLoaded() && discoveredAttrs().length > 0) {
-          <div class="discovered-attrs">
-            <div class="discovered-label">
-              <mat-icon>extension</mat-icon>
-              <span>{{ discoveredAttrs().length }} custom attribute(s) found &mdash;
-                {{ discoveredTestCount() }} tests will run</span>
-            </div>
-            <div class="attr-chips">
-              @for (attr of discoveredAttrs(); track attr.attr_name + attr.schema_urn) {
-                <span class="attr-chip" [class.attr-boolean]="attr.attr_type === 'boolean'">
-                  <span class="attr-name">{{ attr.attr_name }}</span>
-                  <span class="attr-type">{{ attr.attr_type }}</span>
-                  @if (attr.attr_type === 'boolean') {
-                    <span class="attr-badge">2 tests</span>
-                  }
-                </span>
-              }
-            </div>
-            <div class="schema-detail">
-              @for (urn of getUniqueSchemaUrns(); track urn) {
-                <div class="schema-urn">
-                  <mat-icon>schema</mat-icon>
-                  <code>{{ urn }}</code>
-                </div>
-              }
-            </div>
-          </div>
-        }
-
-        @if (discoveryLoaded() && discoveredAttrs().length === 0) {
-          <div class="no-attrs-found">
-            <mat-icon>info</mat-icon>
-            <span>No custom/extension schema attributes found. Only core SCIM schemas are present.</span>
-          </div>
-        }
-      </div>
-    </mat-card-content>
-  </mat-card>
-
-  <!-- Progress -->
-  @if (running()) {
-    <mat-card class="progress-card">
-      <mat-card-content>
-        <div class="progress-info">
-          <div class="progress-text">
-            @if (progress()?.current_category) {
-              <span class="progress-category">{{ progress()?.current_category }}</span>
-            }
-            <span class="progress-label">{{ progress()?.current_test }}</span>
-          </div>
-          <span class="progress-count">{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
-        </div>
-        <mat-progress-bar mode="determinate" [value]="getProgressPercent()"></mat-progress-bar>
-      </mat-card-content>
-    </mat-card>
+      <span class="live-count mono tnum">{{ p.completed }} / {{ p.total }}</span>
+      <button type="button" class="stop" (click)="stopValidation()">
+        <span class="ms" aria-hidden="true">stop</span>
+        Stop
+      </button>
+    </div>
   }
-</div>
-  <!-- Summary -->
+
+  <!-- ── Results ────────────────────────────────────────────────────────── -->
   @if (summary()) {
-    <div class="summary-section">
-      <mat-card class="score-card">
-        <mat-card-content>
-          <div class="score" [style.color]="getScoreColor(summary()!.compliance_score)">
-            {{ summary()!.compliance_score | number:'1.1-1' }}%
-          </div>
-          <div class="score-label">Compliance Score</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="stat-card pass">
-        <mat-card-content>
-          <mat-icon>check_circle</mat-icon>
-          <div class="stat-value">{{ summary()!.passed }}</div>
-          <div class="stat-label">Passed</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="stat-card fail">
-        <mat-card-content>
-          <mat-icon>cancel</mat-icon>
-          <div class="stat-value">{{ summary()!.failed }}</div>
-          <div class="stat-label">Failed</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="stat-card duration">
-        <mat-card-content>
-          <mat-icon>timer</mat-icon>
-          <div class="stat-value">{{ summary()!.duration_ms < 1000 ? (summary()!.duration_ms | number:'1.0-0') + 'ms' : ((summary()!.duration_ms / 1000) | number:'1.1-1') + 's' }}</div>
-          <div class="stat-label">Duration</div>
-        </mat-card-content>
-      </mat-card>
+    <div class="view-row">
+      <app-tabs variant="segment" [tabs]="views" [active]="view()" (selected)="setView($event)" />
+      <span class="view-hint">{{ viewHint() }}</span>
     </div>
 
-    <!-- Category Breakdown -->
-    @if (summary()!.categories && summary()!.categories.length > 0) {
-      <mat-card class="category-breakdown-card">
-        <mat-card-header>
-          <mat-card-title>Category Breakdown</mat-card-title>
-        </mat-card-header>
-        <mat-card-content>
-          @for (cat of summary()!.categories; track cat.name) {
-            <div class="category-row">
-              <span class="cat-name">{{ cat.name }}</span>
-              <div class="cat-bar-container">
-                <div class="cat-bar" [style.width.%]="cat.total > 0 ? (cat.passed / cat.total) * 100 : 0"
-                     [style.background-color]="getScoreColor(cat.total > 0 ? (cat.passed / cat.total) * 100 : 0)">
-                </div>
-              </div>
-              <span class="cat-score">{{ cat.passed }}/{{ cat.total }} <span class="cat-pct">({{ cat.total > 0 ? ((cat.passed / cat.total) * 100 | number:'1.0-0') : 0 }}%)</span></span>
-            </div>
-          }
-        </mat-card-content>
-      </mat-card>
-    }
-  }
-
-  @if (results().length > 0) {
-    <mat-card class="results-card">
-      <mat-card-header>
-        <mat-card-title>
-          Detailed Results
-          <span class="results-count">&mdash; {{ results().length }} tests</span>
-          @if (failCount() > 0) {
-            <span class="results-fail-badge">{{ failCount() }} failed</span>
-          }
-        </mat-card-title>
-        <button mat-stroked-button (click)="exportResults()" class="export-btn">
-          <mat-icon>download</mat-icon> Export
-        </button>
-      </mat-card-header>
-      <mat-card-content>
-        <!-- Search + Filter bar -->
-        <div class="filter-bar">
-          <mat-form-field appearance="outline" class="search-field">
-            <mat-label>Search</mat-label>
-            <input matInput [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Test name or category...">
-            <mat-icon matSuffix>search</mat-icon>
-          </mat-form-field>
-          <div class="filter-toggles">
-            <button mat-stroked-button [class.filter-active]="resultFilter() === 'all'" (click)="resultFilter.set('all')">
-              All ({{ results().length }})
-            </button>
-            <button mat-stroked-button [class.filter-active]="resultFilter() === 'fail'" class="filter-fail" (click)="resultFilter.set('fail')">
-              <mat-icon>cancel</mat-icon> Failed ({{ failCount() }})
-            </button>
-            <button mat-stroked-button [class.filter-active]="resultFilter() === 'pass'" class="filter-pass" (click)="resultFilter.set('pass')">
-              <mat-icon>check_circle</mat-icon> Passed ({{ results().length - failCount() }})
-            </button>
-          </div>
-        </div>
-
-        @if (sortedGroupKeys().length === 0) {
-          <div class="no-results-msg">
-            <mat-icon>search_off</mat-icon> No tests match your filter.
-          </div>
-        }
-
-        @for (catKey of sortedGroupKeys(); track catKey) {
-          <div class="result-group">
-            <div class="result-group-header">
-              <span class="rg-name">{{ catKey }}</span>
-              <span class="rg-stats">
-                <span class="rg-pass">{{ getGroupPassCount(catKey) }} pass</span>
-                @if (getGroupFailCount(catKey) > 0) {
-                  <span class="rg-fail">{{ getGroupFailCount(catKey) }} fail</span>
-                }
-              </span>
-            </div>
-            <mat-accordion>
-              @for (result of getGroupResults(catKey); track result.id) {
-                <mat-expansion-panel>
-                  <mat-expansion-panel-header>
-                    <mat-panel-title>
-                      <mat-icon [style.color]="getStatusColor(result.passed ? 'pass' : 'fail')">
-                        {{ getStatusIcon(result.passed ? 'pass' : 'fail') }}
-                      </mat-icon>
-                      <span class="test-name">{{ result.test_name }}</span>
-                    </mat-panel-title>
-                    <mat-panel-description>
-                      <span class="test-duration">{{ result.duration_ms }}ms</span>
-                    </mat-panel-description>
-                  </mat-expansion-panel-header>
-
-                  <div class="result-detail">
-                    @if (result.failure_reason) {
-                      <div class="detail-row">
-                        <strong>Message:</strong>
-                        <span>{{ result.failure_reason }}</span>
-                      </div>
-                    }
-                    @if (result.response_status) {
-                      <div class="detail-row">
-                        <strong>HTTP Status:</strong>
-                        <span>{{ result.response_status }}</span>
-                      </div>
-                    }
-                    @if (result.url) {
-                      <div class="detail-row">
-                        <strong>Request URL:</strong>
-                        <code>{{ result.url }}</code>
-                      </div>
-                    }
-                    @if (result.http_method) {
-                      <div class="detail-row">
-                        <strong>Method:</strong>
-                        <span>{{ result.http_method }}</span>
-                      </div>
-                    }
-
-                    <!-- Curl Command (credentials masked) -->
-                    <div class="curl-section">
-                      <div class="curl-header">
-                        <strong>Curl Command:</strong>
-                        <span class="curl-masked-note"><mat-icon>lock</mat-icon> credentials masked &mdash;</span>
-                        <button mat-icon-button (click)="copyCurl(result)" matTooltip="Copy with real credentials">
-                          <mat-icon>content_copy</mat-icon>
-                        </button>
-                      </div>
-                      <pre class="curl-block">{{ getCurlCommandDisplay(result) }}</pre>
-                    </div>
-
-                    @if (result.request_body) {
-                      <div class="detail-row">
-                        <strong>Request Body:</strong>
-                        <pre class="response-body">{{ result.request_body }}</pre>
-                      </div>
-                    }
-                    @if (result.response_body) {
-                      <div class="detail-row">
-                        <strong>Response:</strong>
-                        <pre class="response-body">{{ result.response_body }}</pre>
-                      </div>
+    @switch (view()) {
+      <!-- Failures grouped by cause, each with the change that fixes it. -->
+      @case ('triage') {
+        <div class="triage">
+          @if (failGroups().length === 0) {
+            <app-empty-state
+              icon="verified"
+              title="Nothing to triage"
+              detail="Every test passed. Switch to Audit to see the full category breakdown." />
+          } @else {
+            @for (g of failGroups(); track g.key) {
+              <div class="fail">
+                <div class="fail-head">
+                  <span class="ms" aria-hidden="true">error</span>
+                  <div class="fail-main">
+                    <div class="fail-cause">{{ g.cause }}</div>
+                    @if (g.fix) {
+                      <div class="fail-fix">{{ g.fix }}</div>
                     }
                   </div>
-                </mat-expansion-panel>
-              }
-            </mat-accordion>
-          </div>
+                  <span class="fail-count">{{ g.tests.length }}</span>
+                </div>
+
+                @for (t of g.tests; track t.id) {
+                  <div class="test">
+                    <div class="test-head">
+                      <app-method-badge [method]="t.http_method" />
+                      <span class="test-name">{{ t.test_name }}</span>
+                      @if (t.response_status) {
+                        <app-status-chip [code]="t.response_status">{{ t.response_status }}</app-status-chip>
+                      }
+                      <span class="test-ms mono">{{ t.duration_ms }}ms</span>
+                    </div>
+
+                    @if (t.failure_reason) {
+                      <div class="test-reason mono">{{ t.failure_reason }}</div>
+                    }
+
+                    <div class="test-actions">
+                      <button type="button" class="act accent" (click)="copyCurl(t)">
+                        <span class="ms" aria-hidden="true">content_copy</span>
+                        Copy curl
+                      </button>
+                      <button type="button" class="act" (click)="openInExplorer(t)">
+                        <span class="ms" aria-hidden="true">north_east</span>
+                        Open in Explorer
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <div class="passed-note">
+              <span class="ms" aria-hidden="true">check_circle</span>
+              <span>{{ passedNote() }}</span>
+              <button type="button" class="see-all" (click)="setView('audit')">See all in Audit</button>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Every category, whether or not anything failed. -->
+      @case ('audit') {
+        <app-panel [flush]="true">
+          @for (c of auditRows(); track c.name) {
+            <div class="audit">
+              <span class="ms" [style.color]="c.color" aria-hidden="true">{{ c.icon }}</span>
+              <span class="a-name">{{ c.name }}</span>
+              <div class="a-track">
+                <div class="a-fill" [style.width.%]="c.pct" [style.background]="c.color"></div>
+              </div>
+              <span class="a-ratio mono tnum">{{ c.ratio }}</span>
+              <span class="a-pct mono tnum" [style.color]="c.color">{{ c.pct }}%</span>
+              <span class="a-ms mono tnum">{{ c.ms }}ms</span>
+            </div>
+          }
+        </app-panel>
+      }
+
+      <!-- This run against the previous one on the same server. -->
+      @case ('compare') {
+        @if (!hasPrevious()) {
+          <app-empty-state
+            icon="compare_arrows"
+            title="No earlier run to compare"
+            detail="Compare needs a previous completed validation on this server. Run it again after a change." />
+        } @else {
+          <app-panel [flush]="true">
+            <div class="cmp-head">
+              <span class="ch-name">Category</span>
+              <span class="ch-before">Previous</span>
+              <span class="ch-after">This run</span>
+              <span class="ch-delta">Change</span>
+            </div>
+            @for (c of compareRows(); track c.name) {
+              <div class="cmp-row">
+                <span class="ch-name">{{ c.name }}</span>
+                <span class="ch-before mono tnum">{{ c.before }}</span>
+                <span class="ch-after mono tnum">{{ c.after }}</span>
+                <span class="ch-delta">
+                  <span class="ms" [style.color]="c.deltaColor" aria-hidden="true">{{ c.deltaIcon }}</span>
+                  <span class="mono tnum" [style.color]="c.deltaColor">{{ c.delta }}</span>
+                </span>
+              </div>
+            }
+          </app-panel>
         }
-      </mat-card-content>
-    </mat-card>
+      }
+    }
+  } @else if (!running()) {
+    <app-empty-state
+      icon="verified"
+      title="No validation run yet"
+      detail="Ten compliance categories are checked against the active server.">
+      <app-button
+        icon="play_arrow"
+        kind="primary"
+        busyKey="validation"
+        busyLabel="Running…"
+        (press)="runValidation()">
+        Run validation
+      </app-button>
+    </app-empty-state>
   }
+</div>

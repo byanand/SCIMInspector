@@ -1,23 +1,22 @@
 import { Component, computed, inject, signal, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatCardModule } from '@angular/material/card';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatTableModule } from '@angular/material/table';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatExpansionModule } from '@angular/material/expansion';
-import { MatDividerModule } from '@angular/material/divider';
+import { Router } from '@angular/router';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { NotificationService } from '../../services/notification.service';
-import { ValidationResult, ValidationSummary, ValidationProgress, ValidationRunConfig, CategorySummary, DiscoveredSchemaAttribute, ExportRequest } from '../../models/interfaces';
+import { NavCountsService } from '../../services/nav-counts.service';
+import { BusyService } from '../../services/busy.service';
+import { groupFailures } from '../../services/failure-grouping';
+import { UI, TabDef } from '../../ui';
+import {
+  ValidationResult,
+  ValidationSummary,
+  ValidationProgress,
+  CategorySummary,
+  TestRun,
+  ExportRequest,
+} from '../../models/interfaces';
 
 interface CategoryToggle {
   key: string;
@@ -25,29 +24,34 @@ interface CategoryToggle {
   enabled: boolean;
 }
 
+type ValidationView = 'triage' | 'audit' | 'compare';
+
+const VIEW_HINTS: Record<ValidationView, string> = {
+  triage: 'Failures grouped by root cause, with the change that resolves each.',
+  audit: 'Every category and its pass rate, whether or not anything failed.',
+  compare: 'This run against the previous one on the same server.',
+};
+
 @Component({
   selector: 'app-validation',
-  standalone: true,
-  imports: [
-    CommonModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule,
-    MatCheckboxModule, MatProgressBarModule, MatTableModule, MatChipsModule,
-    MatExpansionModule, MatDividerModule, MatTooltipModule, MatSelectModule,
-    MatFormFieldModule, MatInputModule
-  ],
+  imports: [FormsModule, MatTooltipModule, ...UI],
   templateUrl: './validation.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
-  styleUrl: './validation.component.scss'
+  styleUrl: './validation.component.scss',
 })
 export class ValidationComponent implements OnInit, OnDestroy {
-  private tauriService = inject(TauriService);
+  private readonly tauri = inject(TauriService);
+  private readonly notify = inject(NotificationService);
+  private readonly counts = inject(NavCountsService);
+  private readonly router = inject(Router);
   readonly serverConfigService = inject(ServerConfigService);
-  private notificationService = inject(NotificationService);
+  readonly busy = inject(BusyService);
 
-  // Joining property configuration (like Microsoft SCIM Validator)
-  userJoiningProperty = signal('userName');
-  groupJoiningProperty = signal('displayName');
+  readonly userJoiningProperty = signal('userName');
+  readonly groupJoiningProperty = signal('displayName');
+  readonly configOpen = signal(false);
 
-  categories = signal<CategoryToggle[]>([
+  readonly categories = signal<CategoryToggle[]>([
     { key: 'schema_discovery', label: 'Schema Discovery', enabled: true },
     { key: 'users_crud', label: 'Users CRUD', enabled: true },
     { key: 'groups_crud', label: 'Groups CRUD', enabled: true },
@@ -57,279 +61,299 @@ export class ValidationComponent implements OnInit, OnDestroy {
     { key: 'soft_delete', label: 'Soft Delete (active=false)', enabled: true },
     { key: 'group_operations', label: 'Group PATCH & Membership', enabled: true },
     { key: 'field_mapping', label: 'Field Mapping Rules', enabled: true },
-    { key: 'custom_schema', label: 'Custom Schema Properties', enabled: true }
+    { key: 'custom_schema', label: 'Custom Schema Properties', enabled: true },
   ]);
 
-  running = signal(false);
-  stopping = signal(false);
-  progress = signal<ValidationProgress | null>(null);
-  results = signal<ValidationResult[]>([]);
-  summary = signal<ValidationSummary | null>(null);
-  currentRunId = signal<string | null>(null);
-  displayedColumns = ['status', 'category', 'test_name', 'duration_ms', 'message'];
+  readonly running = signal(false);
+  readonly progress = signal<ValidationProgress | null>(null);
+  readonly results = signal<ValidationResult[]>([]);
+  readonly summary = signal<ValidationSummary | null>(null);
+  readonly currentRunId = signal<string | null>(null);
+  readonly view = signal<ValidationView>('triage');
+  /** Category summaries from the previous run on this server, for Compare. */
+  readonly previousSummary = signal<ValidationSummary | null>(null);
+
   private unlistenProgress: (() => void) | null = null;
 
-  // Result filtering & search
-  resultFilter = signal<'all' | 'pass' | 'fail'>('all');
-  searchQuery = signal('');
-  failCount = computed(() => this.results().filter(r => !r.passed).length);
-  groupedResults = computed(() => {
-    const filter = this.resultFilter();
-    const q = this.searchQuery().toLowerCase().trim();
-    const filtered = this.results().filter(r => {
-      if (filter === 'pass' && !r.passed) return false;
-      if (filter === 'fail' && r.passed) return false;
-      if (q && !r.test_name.toLowerCase().includes(q) && !r.category.toLowerCase().includes(q)) return false;
-      return true;
-    });
-    const map = new Map<string, ValidationResult[]>();
-    for (const r of filtered) {
-      if (!map.has(r.category)) map.set(r.category, []);
-      map.get(r.category)!.push(r);
+  readonly views: TabDef[] = [
+    { id: 'triage', label: 'Triage' },
+    { id: 'audit', label: 'Audit' },
+    { id: 'compare', label: 'Compare' },
+  ];
+
+  readonly viewHint = computed(() => VIEW_HINTS[this.view()]);
+
+  readonly enabledCategories = computed(() =>
+    this.categories()
+      .filter((c) => c.enabled)
+      .map((c) => c.key)
+  );
+
+  readonly configSummary = computed(() => {
+    const on = this.enabledCategories().length;
+    const all = this.categories().length;
+    return `${on} of ${all} categories · joining on ${this.userJoiningProperty()} / ${this.groupJoiningProperty()}`;
+  });
+
+  readonly scoreStats = computed(() => {
+    const s = this.summary();
+    if (!s) return [];
+    return [
+      { label: 'Passed', value: String(s.passed), color: 'var(--pass)' },
+      { label: 'Failed', value: String(s.failed), color: s.failed > 0 ? 'var(--fail)' : '' },
+      { label: 'Categories', value: String(s.categories?.length ?? 0), color: '' },
+      { label: 'Duration', value: `${(s.duration_ms / 1000).toFixed(1)}s`, color: '' },
+    ];
+  });
+
+  /** The heart of Triage: N failures collapsed into their handful of causes. */
+  readonly failGroups = computed(() => groupFailures(this.results()));
+
+  readonly passedNote = computed(() => {
+    const s = this.summary();
+    if (!s) return '';
+    const cats = s.categories?.length ?? 0;
+    return `${s.passed} ${s.passed === 1 ? 'test' : 'tests'} passed across ${cats} ${cats === 1 ? 'category' : 'categories'}`;
+  });
+
+  readonly auditRows = computed(() => {
+    const s = this.summary();
+    if (!s?.categories) return [];
+
+    const durationByCategory = new Map<string, number>();
+    for (const r of this.results()) {
+      durationByCategory.set(r.category, (durationByCategory.get(r.category) ?? 0) + r.duration_ms);
     }
-    return map;
-  });
-  sortedGroupKeys = computed(() => Array.from(this.groupedResults().keys()));
 
-  // Custom schema discovery
-  discoveredAttrs = signal<DiscoveredSchemaAttribute[]>([]);
-  discoveryLoading = signal(false);
-  discoveryLoaded = signal(false);
-  discoveredTestCount = computed(() => {
-    const attrs = this.discoveredAttrs();
-    const boolCount = attrs.filter(a => a.attr_type === 'boolean').length;
-    return boolCount * 2 + (attrs.length - boolCount);
+    return s.categories.map((c) => {
+      const pct = c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
+      const color = pct === 100 ? 'var(--pass)' : pct >= 75 ? 'var(--warn)' : 'var(--fail)';
+      return {
+        name: c.name,
+        ratio: `${c.passed}/${c.total}`,
+        pct,
+        color,
+        icon: pct === 100 ? 'check_circle' : 'error',
+        ms: Math.round(durationByCategory.get(c.name) ?? 0),
+      };
+    });
   });
 
-  async ngOnInit() {
+  readonly compareRows = computed(() => {
+    const current = this.summary();
+    const previous = this.previousSummary();
+    if (!current?.categories || !previous?.categories) return [];
+
+    const prevByName = new Map(previous.categories.map((c) => [c.name, c]));
+
+    return current.categories.map((c) => {
+      const prev = prevByName.get(c.name);
+      const after = this.pct(c);
+      const before = prev ? this.pct(prev) : null;
+      const delta = before === null ? null : after - before;
+
+      return {
+        name: c.name,
+        before: before === null ? '—' : `${before}%`,
+        after: `${after}%`,
+        delta: delta === null ? 'new' : `${delta > 0 ? '+' : ''}${delta}%`,
+        deltaIcon: delta === null ? 'add' : delta > 0 ? 'trending_up' : delta < 0 ? 'trending_down' : 'trending_flat',
+        deltaColor:
+          delta === null
+            ? 'var(--ink-3)'
+            : delta > 0
+              ? 'var(--pass)'
+              : delta < 0
+                ? 'var(--fail)'
+                : 'var(--ink-3)',
+      };
+    });
+  });
+
+  readonly hasPrevious = computed(() => this.previousSummary() !== null);
+
+  readonly progressPercent = computed(() => {
+    const p = this.progress();
+    return !p || p.total === 0 ? 0 : Math.round((p.completed / p.total) * 100);
+  });
+
+  async ngOnInit(): Promise<void> {
     await this.serverConfigService.loadConfigs();
   }
 
-  async ngOnDestroy() {
-    if (this.unlistenProgress) {
-      this.unlistenProgress();
-    }
+  ngOnDestroy(): void {
+    this.unlistenProgress?.();
   }
 
-  toggleCategory(index: number) {
-    const updated = [...this.categories()];
-    updated[index] = { ...updated[index], enabled: !updated[index].enabled };
-    this.categories.set(updated);
+  private pct(c: CategorySummary): number {
+    return c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
   }
 
-  toggleAll(enabled: boolean) {
-    this.categories.set(this.categories().map(c => ({ ...c, enabled })));
+  // ── Configuration ──────────────────────────────────────────────────────────
+  toggleConfig(): void {
+    this.configOpen.update((v) => !v);
   }
 
-  get enabledCategories(): string[] {
-    return this.categories().filter(c => c.enabled).map(c => c.key);
+  toggleCategory(index: number): void {
+    this.categories.update((cats) =>
+      cats.map((c, i) => (i === index ? { ...c, enabled: !c.enabled } : c))
+    );
   }
 
-  getUniqueSchemaUrns(): string[] {
-    const urns = new Set(this.discoveredAttrs().map(a => a.schema_urn));
-    return Array.from(urns);
+  setView(view: string): void {
+    this.view.set(view as ValidationView);
   }
 
-  async discoverCustomAttributes() {
+  // ── Run ────────────────────────────────────────────────────────────────────
+  async runValidation(): Promise<void> {
     const configId = this.serverConfigService.getSelectedId();
     if (!configId) {
-      this.notificationService.error('Please select a server profile first.');
-      return;
-    }
-    this.discoveryLoading.set(true);
-    try {
-      const attrs = await this.tauriService.discoverCustomSchema(configId);
-      this.discoveredAttrs.set(attrs);
-      this.discoveryLoaded.set(true);
-      if (attrs.length === 0) {
-        this.notificationService.info('No custom/extension schema attributes found.');
-      } else {
-        const boolCount = attrs.filter(a => a.attr_type === 'boolean').length;
-        const otherCount = attrs.length - boolCount;
-        const testCount = boolCount * 2 + otherCount;
-        this.notificationService.success(`Discovered ${attrs.length} custom attributes (${testCount} tests will be generated).`);
-      }
-    } catch (err: any) {
-      this.notificationService.error('Discovery failed: ' + (err?.message || err));
-    } finally {
-      this.discoveryLoading.set(false);
-    }
-  }
-
-  async runValidation() {
-    const configId = this.serverConfigService.getSelectedId();
-    if (!configId) {
-      this.notificationService.error('Please select a server profile first.');
+      this.notify.error('Please select a server profile first.');
       return;
     }
 
-    if (this.enabledCategories.length === 0) {
-      this.notificationService.error('Please enable at least one test category.');
+    if (this.enabledCategories().length === 0) {
+      this.notify.error('Please enable at least one test category.');
       return;
     }
 
-    this.running.set(true);
-    this.results.set([]);
-    this.summary.set(null);
-    this.resultFilter.set('all');
-    this.searchQuery.set('');
-    this.progress.set({ test_run_id: '', current_test: 'Starting...', current_category: '', completed: 0, total: 0 });
-
-    try {
-      this.unlistenProgress = await this.tauriService.onValidationProgress((p: ValidationProgress) => {
-        this.progress.set(p);
+    await this.busy.run('validation', async () => {
+      this.running.set(true);
+      this.results.set([]);
+      this.summary.set(null);
+      this.progress.set({
+        test_run_id: '',
+        current_test: 'Starting…',
+        current_category: '',
+        completed: 0,
+        total: 0,
       });
 
-      const runId = await this.tauriService.runValidation({
-        server_config_id: configId,
-        categories: this.enabledCategories,
-        user_joining_property: this.userJoiningProperty(),
-        group_joining_property: this.groupJoiningProperty()
-      });
-      this.currentRunId.set(runId);
-      this.notificationService.success('Validation completed!');
+      // Captured before the new run lands, so Compare has something to sit against.
+      await this.loadPreviousSummary(configId);
 
-      // Load results
-      const loadedResults = await this.tauriService.getValidationResults(runId);
-      this.results.set(loadedResults);
-      this.summary.set(this.computeValidationSummary(loadedResults));
-    } catch (err: any) {
-      const msg = (err?.message || String(err));
-      if (msg.toLowerCase().includes('cancel')) {
-        this.notificationService.info('Validation cancelled.');
-      } else {
-        this.notificationService.error('Validation failed: ' + msg);
-      }
-    } finally {
-      this.running.set(false);
-      if (this.unlistenProgress) {
-        this.unlistenProgress();
+      try {
+        this.unlistenProgress = await this.tauri.onValidationProgress((p) => this.progress.set(p));
+
+        const runId = await this.tauri.runValidation({
+          server_config_id: configId,
+          categories: this.enabledCategories(),
+          user_joining_property: this.userJoiningProperty(),
+          group_joining_property: this.groupJoiningProperty(),
+        });
+        this.currentRunId.set(runId);
+
+        const results = await this.tauri.getValidationResults(runId);
+        this.results.set(results);
+        this.summary.set(this.computeSummary(results));
+        this.configOpen.set(false);
+        await this.counts.refreshRuns();
+        this.notify.success('Validation completed.');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.toLowerCase().includes('cancel')) {
+          this.notify.info('Validation cancelled.');
+        } else {
+          this.notify.error('Validation failed: ' + msg);
+        }
+      } finally {
+        this.running.set(false);
+        this.progress.set(null);
+        this.unlistenProgress?.();
         this.unlistenProgress = null;
       }
-    }
+    });
   }
 
-  async stopValidation() {
-    const runId = this.currentRunId();
-    if (!runId) return;
-    this.stopping.set(true);
-    try {
-      await this.tauriService.stopValidation(runId);
-    } catch { /* already done is fine */ }
-    finally { this.stopping.set(false); }
-  }
-
-  async exportResults() {
+  async stopValidation(): Promise<void> {
     const runId = this.currentRunId();
     if (!runId) return;
     try {
-      const { save } = await import('@tauri-apps/plugin-dialog');
-
-      // Ask user which format they want via the save-dialog filter selection
-      const outputPath = await save({
-        defaultPath: 'validation-report.xlsx',
-        filters: [
-          { name: 'Excel Workbook (2 sheets + charts)', extensions: ['xlsx'] },
-          { name: 'HTML Report (print to PDF)', extensions: ['html'] },
-          { name: 'CSV',  extensions: ['csv']  },
-          { name: 'JSON', extensions: ['json'] },
-        ],
-      });
-      if (!outputPath) return;
-
-      const ext = outputPath.split('.').pop()?.toLowerCase() ?? 'xlsx';
-      const format = ext === 'xlsx' ? 'excel'
-                   : ext === 'html' ? 'pdf'
-                   : ext === 'csv'  ? 'csv'
-                   : 'json';
-
-      const request: ExportRequest = { test_run_id: runId, format, output_path: outputPath };
-      await this.tauriService.exportReport(request);
-
-      if (format === 'excel') {
-        this.notificationService.success('Excel report exported and opened!');
-      } else if (format === 'pdf') {
-        this.notificationService.success('Report opened in browser. Use File \u2192 Print \u2192 Save as PDF.');
-      } else {
-        this.notificationService.success(`Report exported as ${ext.toUpperCase()}.`);
-      }
-    } catch (err: any) {
-      this.notificationService.error('Export failed: ' + (err?.message || err));
+      await this.tauri.stopValidation(runId);
+    } catch {
+      // Already finished is fine.
     }
   }
 
-  getStatusIcon(status: string): string {
-    switch (status) {
-      case 'pass': return 'check_circle';
-      case 'fail': return 'cancel';
-      case 'skip': return 'remove_circle';
-      case 'error': return 'error';
-      default: return 'help';
+  /** Most recent completed validation on this server, before the run about to start. */
+  private async loadPreviousSummary(configId: string): Promise<void> {
+    try {
+      const runs = await this.tauri.getTestRuns();
+      const previous = runs.find(
+        (r: TestRun) =>
+          r.run_type === 'validation' &&
+          r.status === 'completed' &&
+          r.server_config_id === configId &&
+          r.summary_json
+      );
+      this.previousSummary.set(
+        previous?.summary_json ? (JSON.parse(previous.summary_json) as ValidationSummary) : null
+      );
+    } catch {
+      this.previousSummary.set(null);
     }
   }
 
-  getStatusColor(status: string): string {
-    switch (status) {
-      case 'pass': return 'green';
-      case 'fail': return 'red';
-      case 'skip': return 'orange';
-      case 'error': return 'red';
-      default: return 'grey';
+  // ── Per-failure actions ────────────────────────────────────────────────────
+  async copyCurl(result: ValidationResult): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.buildCurl(result, false));
+      this.notify.success('Curl command copied to clipboard.');
+    } catch {
+      this.notify.error('Failed to copy to clipboard.');
     }
   }
 
-  getProgressPercent(): number {
-    const p = this.progress();
-    if (!p || p.total === 0) return 0;
-    return Math.round((p.completed / p.total) * 100);
-  }
-
-  getScoreColor(score: number): string {
-    if (score >= 90) return 'green';
-    if (score >= 70) return 'orange';
-    return 'red';
-  }
-
-  getCurlCommand(result: ValidationResult): string {
-    return this.buildCurl(result, false);
-  }
-
-  getCurlCommandDisplay(result: ValidationResult): string {
-    return this.buildCurl(result, true);
+  /**
+   * Hands the failing request to the Explorer so it can be re-sent and edited,
+   * which is the usual next step after reading a cause.
+   */
+  openInExplorer(result: ValidationResult): void {
+    void this.router.navigate(['/explorer'], {
+      state: {
+        method: result.http_method,
+        path: result.url,
+        body: result.request_body ?? '',
+      },
+    });
   }
 
   private buildCurl(result: ValidationResult, masked: boolean): string {
     const config = this.serverConfigService.selectedConfig();
     if (!config) return '';
 
-    const fullUrl = `${config.base_url.replace(/\/$/, '')}${result.url.startsWith('/') ? '' : '/'}${result.url}`;
-    let parts = [`curl -X ${result.http_method}`];
-    parts.push(`  '${fullUrl}'`);
-    parts.push(`  -H 'Content-Type: application/scim+json'`);
-    parts.push(`  -H 'Accept: application/scim+json'`);
+    const base = config.base_url.replace(/\/$/, '');
+    const fullUrl = `${base}${result.url.startsWith('/') ? '' : '/'}${result.url}`;
+    const parts = [
+      `curl -X ${result.http_method}`,
+      `  '${fullUrl}'`,
+      `  -H 'Content-Type: application/scim+json'`,
+      `  -H 'Accept: application/scim+json'`,
+    ];
 
     switch (config.auth_type) {
       case 'bearer':
         if (config.auth_token) {
-          parts.push(`  -H 'Authorization: Bearer ${ masked ? '***' : config.auth_token }'`);
+          parts.push(`  -H 'Authorization: Bearer ${masked ? '***' : config.auth_token}'`);
         }
         break;
       case 'basic':
         if (config.auth_username && config.auth_password) {
-          parts.push(masked ? `  -u '***:***'` : `  -u '${config.auth_username}:${config.auth_password}'`);
+          parts.push(
+            masked ? `  -u '***:***'` : `  -u '${config.auth_username}:${config.auth_password}'`
+          );
         }
         break;
       case 'apikey':
         if (config.api_key_header && config.api_key_value) {
-          parts.push(`  -H '${config.api_key_header}: ${ masked ? '***' : config.api_key_value }'`);
+          parts.push(`  -H '${config.api_key_header}: ${masked ? '***' : config.api_key_value}'`);
         }
         break;
     }
 
     if (result.request_body) {
       try {
-        const pretty = JSON.stringify(JSON.parse(result.request_body), null, 2);
-        parts.push(`  -d '${pretty}'`);
+        parts.push(`  -d '${JSON.stringify(JSON.parse(result.request_body), null, 2)}'`);
       } catch {
         parts.push(`  -d '${result.request_body}'`);
       }
@@ -338,51 +362,67 @@ export class ValidationComponent implements OnInit, OnDestroy {
     return parts.join(' \\\n');
   }
 
-  getGroupResults(catKey: string): ValidationResult[] {
-    return this.groupedResults().get(catKey) ?? [];
+  // ── Export ─────────────────────────────────────────────────────────────────
+  async exportResults(): Promise<void> {
+    const runId = this.currentRunId();
+    if (!runId) return;
+
+    await this.busy.run('export', async () => {
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const outputPath = await save({
+          defaultPath: 'validation-report.xlsx',
+          filters: [
+            { name: 'Excel Workbook (2 sheets + charts)', extensions: ['xlsx'] },
+            { name: 'HTML Report (print to PDF)', extensions: ['html'] },
+            { name: 'CSV', extensions: ['csv'] },
+            { name: 'JSON', extensions: ['json'] },
+          ],
+        });
+        if (!outputPath) return;
+
+        const ext = outputPath.split('.').pop()?.toLowerCase() ?? 'xlsx';
+        const format: ExportRequest['format'] =
+          ext === 'xlsx' ? 'excel' : ext === 'html' ? 'pdf' : ext === 'csv' ? 'csv' : 'json';
+
+        await this.tauri.exportReport({
+          test_run_id: runId,
+          format,
+          output_path: outputPath,
+        });
+
+        this.notify.success(
+          format === 'pdf'
+            ? 'Report opened in browser. Use File → Print → Save as PDF.'
+            : `Report exported as ${ext.toUpperCase()}.`
+        );
+      } catch (err) {
+        this.notify.error('Export failed: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    });
   }
 
-  getGroupFailCount(catKey: string): number {
-    return this.getGroupResults(catKey).filter(r => !r.passed).length;
-  }
-
-  getGroupPassCount(catKey: string): number {
-    return this.getGroupResults(catKey).filter(r => r.passed).length;
-  }
-
-  async copyCurl(result: ValidationResult) {
-    const cmd = this.getCurlCommand(result);
-    try {
-      await navigator.clipboard.writeText(cmd);
-      this.notificationService.success('Curl command copied to clipboard!');
-    } catch {
-      this.notificationService.error('Failed to copy to clipboard.');
-    }
-  }
-
-  private computeValidationSummary(results: ValidationResult[]): ValidationSummary {
+  private computeSummary(results: ValidationResult[]): ValidationSummary {
     const total = results.length;
-    const passed = results.filter(r => r.passed).length;
-    const failed = total - passed;
+    const passed = results.filter((r) => r.passed).length;
     const duration_ms = results.reduce((sum, r) => sum + r.duration_ms, 0);
-    const compliance_score = total > 0 ? (passed / total) * 100 : 0;
 
     const catMap = new Map<string, { total: number; passed: number; failed: number }>();
     for (const r of results) {
-      if (!catMap.has(r.category)) {
-        catMap.set(r.category, { total: 0, passed: 0, failed: 0 });
-      }
-      const cat = catMap.get(r.category)!;
+      const cat = catMap.get(r.category) ?? { total: 0, passed: 0, failed: 0 };
       cat.total++;
-      if (r.passed) cat.passed++;
-      else cat.failed++;
+      r.passed ? cat.passed++ : cat.failed++;
+      catMap.set(r.category, cat);
     }
 
-    const categories: CategorySummary[] = Array.from(catMap.entries()).map(([name, stats]) => ({
-      name,
-      ...stats
-    }));
-
-    return { total, passed, failed, skipped: 0, compliance_score, duration_ms, categories };
+    return {
+      total,
+      passed,
+      failed: total - passed,
+      skipped: 0,
+      compliance_score: total > 0 ? (passed / total) * 100 : 0,
+      duration_ms,
+      categories: [...catMap.entries()].map(([name, stats]) => ({ name, ...stats })),
+    };
   }
 }

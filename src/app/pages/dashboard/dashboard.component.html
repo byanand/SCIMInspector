@@ -1,83 +1,77 @@
-<div class="dashboard">
-  <div class="stats-grid">
-    <mat-card class="stat-card">
-      <mat-card-content>
-        <mat-icon class="stat-icon" color="primary">dns</mat-icon>
-        <div class="stat-value">{{ serverCount() }}</div>
-        <div class="stat-label">Server Profiles</div>
-      </mat-card-content>
-      <mat-card-actions>
-        <a mat-button routerLink="/server-config" color="primary">Manage</a>
-      </mat-card-actions>
-    </mat-card>
-
-    <mat-card class="stat-card">
-      <mat-card-content>
-        <mat-icon class="stat-icon" [style.color]="lastValidationScore() !== null && lastValidationScore()! >= 80 ? '#4caf50' : '#ff9800'">verified</mat-icon>
-        <div class="stat-value">
-          @if (lastValidationScore() !== null) {
-            {{ lastValidationScore() }}%
-          } @else {
-            --
-          }
-        </div>
-        <div class="stat-label">Last Compliance Score</div>
-      </mat-card-content>
-      <mat-card-actions>
-        <a mat-button routerLink="/validation" color="primary">Run Tests</a>
-      </mat-card-actions>
-    </mat-card>
-
-    <mat-card class="stat-card">
-      <mat-card-content>
-        <mat-icon class="stat-icon" color="accent">speed</mat-icon>
-        <div class="stat-value">
-          @if (lastLoadTestRps() !== null) {
-            {{ lastLoadTestRps() }}
-          } @else {
-            --
-          }
-        </div>
-        <div class="stat-label">Last RPS</div>
-      </mat-card-content>
-      <mat-card-actions>
-        <a mat-button routerLink="/load-test" color="primary">Load Test</a>
-      </mat-card-actions>
-    </mat-card>
-
-    <mat-card class="stat-card">
-      <mat-card-content>
-        <mat-icon class="stat-icon" color="primary">assessment</mat-icon>
-        <div class="stat-value">{{ recentRuns().length }}</div>
-        <div class="stat-label">Recent Test Runs</div>
-      </mat-card-content>
-      <mat-card-actions>
-        <a mat-button routerLink="/reports" color="primary">View Reports</a>
-      </mat-card-actions>
-    </mat-card>
+<div class="page">
+  <div class="stats">
+    @for (s of stats(); track s.label) {
+      <app-metric
+        [label]="s.label"
+        [value]="s.value"
+        [unit]="s.unit"
+        [note]="s.note"
+        [color]="s.color" />
+    }
   </div>
 
-  <mat-card class="recent-runs-card">
-    <mat-card-header>
-      <mat-card-title>Recent Test Runs</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
+  <div class="split">
+    <app-panel title="Recent runs" [flush]="true">
+      <a actions class="link" routerLink="/reports">All reports</a>
+
       @if (recentRuns().length === 0) {
-        <p class="empty-state">No test runs yet. Configure a server and run your first validation!</p>
+        <app-empty-state
+          icon="assessment"
+          title="No runs yet"
+          detail="Configure a server and run your first validation.">
+          <app-button icon="play_arrow" kind="primary" (press)="openRun()">
+            Go to Reports
+          </app-button>
+        </app-empty-state>
       } @else {
-        <div class="runs-list">
-          @for (run of recentRuns(); track run.id) {
-            <div class="run-item">
-              <mat-icon>{{ run.run_type === 'validation' ? 'verified' : 'speed' }}</mat-icon>
-              <div class="run-info">
-                <span class="run-type">{{ run.run_type === 'validation' ? 'Validation' : 'Load Test' }}</span>
-                <span class="run-date">{{ formatDate(run.started_at) }}</span>
+        @for (r of recentRuns(); track r.id) {
+          <button type="button" class="run" (click)="openRun()">
+            <span class="ms" aria-hidden="true">{{ r.icon }}</span>
+            <span class="run-main">
+              <span class="run-title">{{ r.title }}</span>
+              <span class="run-meta">{{ r.server }} · {{ r.date }}</span>
+            </span>
+            <span class="run-summary mono">{{ r.summary }}</span>
+            <app-status-chip [tone]="r.tone">{{ r.status }}</app-status-chip>
+          </button>
+        }
+      }
+    </app-panel>
+
+    <div class="side">
+      <app-panel title="Compliance by category">
+        @if (categoryBars().length === 0) {
+          <p class="muted">No validation results yet.</p>
+        } @else {
+          <div class="bars">
+            @for (c of categoryBars(); track c.name) {
+              <div class="bar-row">
+                <div class="bar-head">
+                  <span class="bar-name">{{ c.name }}</span>
+                  <span class="bar-ratio mono">{{ c.ratio }}</span>
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill" [style.width.%]="c.pct" [style.background]="c.color"></div>
+                </div>
               </div>
-              <mat-chip [color]="getStatusColor(run.status)">{{ run.status }}</mat-chip>
-            </div>
-          }
+            }
+          </div>
+        }
+      </app-panel>
+
+      @if (nextStep(); as step) {
+        <div class="next">
+          <div class="next-head">
+            <span class="ms" aria-hidden="true">bolt</span>
+            <span>Next step</span>
+          </div>
+          <p>{{ step.text }}</p>
+          <a class="next-go" [routerLink]="step.route">
+            <span class="ms" aria-hidden="true">arrow_forward</span>
+            {{ step.label }}
+          </a>
         </div>
       }
-    </mat-card-content>
-  </mat-card>
+    </div>
+  </div>
 </div>

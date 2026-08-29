@@ -1,202 +1,220 @@
-<div class="settings">
-  <!-- Appearance -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>palette</mat-icon> Appearance
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Dark Mode</span>
-          <span class="setting-description">Switch between light and dark theme</span>
-        </div>
-        <mat-slide-toggle
-          [checked]="themeService.darkMode()"
-          (change)="themeService.toggle()">
-        </mat-slide-toggle>
-      </div>
-    </mat-card-content>
-  </mat-card>
+<div class="page">
+  <!-- ── Appearance ─────────────────────────────────────────────────────── -->
+  <app-panel [flush]="true">
+    <div class="sec-head">
+      <span class="ms" aria-hidden="true">palette</span>
+      <span>Appearance</span>
+    </div>
 
-  <!-- AI Integration -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>auto_awesome</mat-icon> AI Integration
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">OpenAI API Key</span>
-          <span class="setting-description">
-            Used in SCIM Explorer to auto-generate realistic user and group data (GPT-4o-mini).
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Theme</div>
+        <div class="row-desc">Light and dark share one set of tokens; nothing is redrawn.</div>
+      </div>
+      <div class="row-control">
+        <app-tabs
+          variant="segment"
+          [tabs]="[{ id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }]"
+          [active]="themeService.darkMode() ? 'dark' : 'light'"
+          (selected)="setTheme($event === 'dark')" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Accent</div>
+        <div class="row-desc">
+          Colours selection and primary actions. Chroma stays reserved for meaning elsewhere.
+        </div>
+      </div>
+      <div class="row-control">
+        <div class="swatches">
+          @for (a of accents; track a.id) {
+            <button
+              type="button"
+              class="swatch"
+              [class.on]="themeService.accent() === a.id"
+              [attr.data-accent]="a.id"
+              [matTooltip]="a.label"
+              [attr.aria-label]="a.label"
+              [attr.aria-pressed]="themeService.accent() === a.id"
+              (click)="setAccent(a.id)"></button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Density</div>
+        <div class="row-desc">
+          Compact tightens control height and page padding for smaller windows.
+        </div>
+      </div>
+      <div class="row-control">
+        <app-tabs
+          variant="segment"
+          [tabs]="[
+            { id: 'comfortable', label: 'Comfortable' },
+            { id: 'compact', label: 'Compact' },
+          ]"
+          [active]="themeService.density()"
+          (selected)="setDensity($event === 'compact')" />
+      </div>
+    </div>
+  </app-panel>
+
+  <!-- ── AI integration ─────────────────────────────────────────────────── -->
+  <app-panel [flush]="true">
+    <div class="sec-head">
+      <span class="ms" aria-hidden="true">auto_awesome</span>
+      <span>AI integration</span>
+    </div>
+
+    <div class="row stack">
+      <div class="row-main">
+        <div class="row-label">OpenAI API key</div>
+        <div class="row-desc">
+          Used by Generate in the Explorer to draft SCIM payloads. Stored locally and never
+          sent anywhere but OpenAI.
+        </div>
+      </div>
+
+      <div class="key-area">
+        @if (openaiKeyConfigured() && !showOpenaiKey()) {
+          <div class="key-set">
+            <span class="ms ok" aria-hidden="true">check_circle</span>
+            <span class="key-mask mono">{{ openaiKeyMasked() }}</span>
+            <app-button (press)="showOpenaiKey.set(true)">Replace</app-button>
+            <app-button busyKey="testKey" busyLabel="Verifying…" (press)="testOpenAiKey()">
+              Test
+            </app-button>
+            <app-button kind="danger" icon="delete" (press)="removeOpenAiKey()">Remove</app-button>
+          </div>
+        } @else {
+          <div class="key-entry">
+            <input
+              class="f-input mono"
+              type="password"
+              autocomplete="off"
+              placeholder="sk-…"
+              [ngModel]="openaiKey()"
+              (ngModelChange)="openaiKey.set($event)"
+              aria-label="OpenAI API key" />
+            <app-button kind="primary" (press)="saveOpenAiKey()">Save key</app-button>
             @if (openaiKeyConfigured()) {
-              <span class="key-status configured">Configured: {{ openaiKeyMasked() }}</span>
-            } @else {
-              <span class="key-status not-configured">Not configured</span>
+              <app-button (press)="showOpenaiKey.set(false)">Cancel</app-button>
             }
-          </span>
-        </div>
+          </div>
+        }
       </div>
-      <div class="ai-key-form">
-        <mat-form-field appearance="outline" class="key-input">
-          <mat-label>API Key</mat-label>
-          <input matInput
-            [type]="showOpenaiKey() ? 'text' : 'password'"
-            [value]="openaiKey()"
-            (input)="openaiKey.set($any($event.target).value)"
-            placeholder="sk-...">
-          <button mat-icon-button matSuffix (click)="showOpenaiKey.set(!showOpenaiKey())">
-            <mat-icon>{{ showOpenaiKey() ? 'visibility_off' : 'visibility' }}</mat-icon>
-          </button>
-        </mat-form-field>
-        <div class="ai-key-actions">
-          <button mat-raised-button color="primary" (click)="saveOpenAiKey()" [disabled]="savingKey()">
-            @if (savingKey()) {
-              <mat-spinner diameter="18"></mat-spinner>
-            } @else {
-              <mat-icon>save</mat-icon>
-            }
-            Save
-          </button>
-          <button mat-stroked-button (click)="testOpenAiKey()" [disabled]="testingKey() || !openaiKeyConfigured()">
-            @if (testingKey()) {
-              <mat-spinner diameter="18"></mat-spinner>
-            } @else {
-              <mat-icon>science</mat-icon>
-            }
-            Test
-          </button>
-          @if (openaiKeyConfigured()) {
-            <button mat-stroked-button color="warn" (click)="removeOpenAiKey()">
-              <mat-icon>delete</mat-icon> Remove
-            </button>
-          }
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
+    </div>
+  </app-panel>
 
-  <!-- Updates -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>system_update</mat-icon> Updates
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Check for updates on startup</span>
-          <span class="setting-description">
-            Once a day, check GitHub for a newer release. Nothing is downloaded or
-            installed automatically — you'll get a notification with a download link.
-          </span>
+  <!-- ── Updates ────────────────────────────────────────────────────────── -->
+  <app-panel [flush]="true">
+    <div class="sec-head">
+      <span class="ms" aria-hidden="true">system_update_alt</span>
+      <span>Updates</span>
+    </div>
+
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Check for updates on startup</div>
+        <div class="row-desc">
+          Queries the GitHub releases API once a day. Silent when there is nothing new.
         </div>
-        <mat-slide-toggle
+      </div>
+      <div class="row-control">
+        <app-toggle
           [checked]="updateCheckEnabled()"
-          (change)="toggleUpdateCheck($event.checked)">
-        </mat-slide-toggle>
+          label="Check for updates on startup"
+          (toggled)="toggleUpdateCheck($event)" />
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Current version</span>
-          <span class="setting-description">
-            @if (updateService.latest(); as info) {
-              @if (info.update_available) {
-                <span class="key-status not-configured">
-                  Version {{ info.latest_version }} is available
-                </span>
-              } @else {
-                <span class="key-status configured">Up to date</span>
-              }
-            } @else {
-              v{{ appVersion() }}
-            }
-          </span>
-        </div>
-        <div class="clear-actions">
-          @if (updateService.latest()?.update_available) {
-            <button mat-raised-button color="primary"
-              (click)="updateService.openReleasePage(updateService.latest()!.release_url)">
-              <mat-icon>download</mat-icon> Download
-            </button>
-          }
-          <button mat-stroked-button (click)="updateService.checkNow()"
-            [disabled]="updateService.checking()">
-            @if (updateService.checking()) {
-              <mat-spinner diameter="18"></mat-spinner>
-            } @else {
-              <mat-icon>refresh</mat-icon>
-            }
-            Check Now
-          </button>
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
+    </div>
 
-  <!-- Data Management -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>storage</mat-icon> Data Management
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Clear All Data</span>
-          <span class="setting-description">Delete all server profiles, test runs, and results from the local database</span>
-        </div>
-        <div class="clear-actions">
-          @if (confirmingClear()) {
-            <span class="confirm-text">Are you sure?</span>
-            <button mat-raised-button color="warn" (click)="clearAllData()">
-              <mat-icon>delete_forever</mat-icon> Yes, Clear
-            </button>
-            <button mat-button (click)="cancelClear()">Cancel</button>
-          } @else {
-            <button mat-stroked-button color="warn" (click)="clearAllData()">
-              <mat-icon>delete_sweep</mat-icon> Clear Data
-            </button>
-          }
-        </div>
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Check now</div>
+        <div class="row-desc">Compares this build against the latest published release.</div>
       </div>
-    </mat-card-content>
-  </mat-card>
+      <div class="row-control">
+        <app-button icon="sync" busyKey="checkUpdate" busyLabel="Checking…" (press)="checkForUpdate()">
+          Check for updates
+        </app-button>
+      </div>
+    </div>
+  </app-panel>
 
-  <!-- About -->
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        <mat-icon>info</mat-icon> About
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="about-content">
-        <h2>SCIM Inspector</h2>
-        <p class="version">Version {{ appVersion() }}</p>
-        <p>A desktop application for validating SCIM 2.0 server compliance and load testing SCIM endpoints.</p>
-        <mat-divider></mat-divider>
-        <div class="about-details">
-          <div class="detail-row">
-            <span>Built with</span>
-            <span>Tauri 2 + Angular + Rust</span>
-          </div>
-          <div class="detail-row">
-            <span>SCIM Version</span>
-            <span>2.0 (RFC 7643 / 7644)</span>
-          </div>
-          <div class="detail-row">
-            <span>Platform</span>
-            <span>Windows / macOS / Linux</span>
-          </div>
+  <!-- ── Local data ─────────────────────────────────────────────────────── -->
+  <app-panel [flush]="true">
+    <div class="sec-head">
+      <span class="ms" aria-hidden="true">database</span>
+      <span>Local data</span>
+    </div>
+
+    <div class="row">
+      <div class="row-main">
+        <div class="row-label">Clear all data</div>
+        <div class="row-desc">
+          Removes every server profile, field mapping rule, sample template and stored run
+          from the local database. This cannot be undone.
         </div>
       </div>
-    </mat-card-content>
-  </mat-card>
+      <div class="row-control">
+        @if (confirmingClear()) {
+          <app-button (press)="cancelClear()">Cancel</app-button>
+          <app-button
+            kind="danger"
+            icon="delete_forever"
+            busyKey="clearData"
+            busyLabel="Clearing…"
+            (press)="clearAllData()">
+            Confirm clear
+          </app-button>
+        } @else {
+          <app-button kind="danger" icon="delete_sweep" (press)="clearAllData()">
+            Clear all data
+          </app-button>
+        }
+      </div>
+    </div>
+  </app-panel>
+
+  <!-- ── About ──────────────────────────────────────────────────────────── -->
+  <app-panel>
+    <div class="about-head">
+      <app-brand-mark [size]="38" />
+      <div>
+        <div class="about-name">SCIM Inspector</div>
+        <div class="about-version mono">{{ appVersion() ? 'v' + appVersion() : '—' }}</div>
+      </div>
+    </div>
+
+    <p class="about-blurb">
+      A desktop application for validating SCIM 2.0 server compliance and load testing SCIM
+      endpoints.
+    </p>
+
+    <div class="about-rows">
+      <div class="about-row">
+        <span class="k">Storage</span>
+        <span>Local SQLite database</span>
+      </div>
+      <div class="about-row">
+        <span class="k">Network</span>
+        <span>Only the SCIM servers you configure</span>
+      </div>
+      <div class="about-row">
+        <span class="k">Licence</span>
+        <span>MIT</span>
+      </div>
+      <div class="about-row">
+        <span class="k">Repository</span>
+        <a href="https://github.com/byanand/SCIMInspector" target="_blank" rel="noopener">
+          github.com/byanand/SCIMInspector
+        </a>
+      </div>
+    </div>
+  </app-panel>
 </div>

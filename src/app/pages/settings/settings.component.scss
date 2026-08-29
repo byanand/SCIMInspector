@@ -1,170 +1,205 @@
-.settings {
-  padding: 32px;
+.page {
+  padding: 20px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+}
 
-  h1 {
-    font-size: 26px;
-    font-weight: 500;
-    margin: 0 0 32px;
-  }
+// ── Section scaffolding ──────────────────────────────────────────────────────
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+  font-weight: 600;
 
-  mat-card {
-    margin-bottom: 28px;
-
-    mat-card-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 18px;
-    }
-  }
-
-  .setting-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 0;
-
-    .setting-info {
-      display: flex;
-      flex-direction: column;
-
-      .setting-label {
-        font-size: 15px;
-        font-weight: 500;
-      }
-
-      .setting-description {
-        font-size: 13px;
-        color: rgba(0, 0, 0, 0.54);
-        margin-top: 4px;
-      }
-    }
-
-    .clear-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .confirm-text {
-        font-size: 14px;
-        font-weight: 500;
-        color: #c62828;
-      }
-    }
-  }
-
-  .key-status {
-    display: inline-block;
-    margin-left: 8px;
-    font-weight: 500;
-    font-size: 12px;
-    padding: 1px 8px;
-    border-radius: 8px;
-
-    &.configured {
-      background: #e8f5e9;
-      color: #2e7d32;
-    }
-
-    &.not-configured {
-      background: #fff3e0;
-      color: #e65100;
-    }
-  }
-
-  .ai-key-form {
-    margin-top: 8px;
-
-    .key-input {
-      width: 100%;
-    }
-
-    .ai-key-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-top: 4px;
-
-      button {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-    }
-  }
-
-  .about-content {
-    h2 {
-      font-size: 20px;
-      font-weight: 600;
-      margin: 0 0 4px;
-    }
-
-    .version {
-      font-size: 14px;
-      color: rgba(0, 0, 0, 0.54);
-      margin: 0 0 12px;
-    }
-
-    p {
-      font-size: 14px;
-      margin: 0 0 16px;
-    }
-
-    mat-divider {
-      margin-bottom: 16px;
-    }
-
-    .about-details {
-      .detail-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        font-size: 14px;
-
-        &:not(:last-child) {
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-        }
-
-        span:first-child {
-          color: rgba(0, 0, 0, 0.54);
-        }
-
-        span:last-child {
-          font-weight: 500;
-        }
-      }
-    }
+  .ms {
+    font-size: 18px;
+    color: var(--ink-3);
   }
 }
 
-:host-context(.dark-theme) {
-  .settings {
-    .setting-row .setting-info .setting-description {
-      color: rgba(255, 255, 255, 0.54);
-    }
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
 
-    .key-status {
-      &.configured {
-        background: #1b5e20;
-        color: #a5d6a7;
-      }
+  &:last-child {
+    border-bottom: none;
+  }
 
-      &.not-configured {
-        background: #e65100;
-        color: #ffcc80;
-      }
-    }
+  // Controls that need the full width sit under their description instead of
+  // beside it.
+  &.stack {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
 
-    .about-content {
-      .version,
-      .about-details .detail-row span:first-child {
-        color: rgba(255, 255, 255, 0.54);
-      }
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
 
-      .about-details .detail-row:not(:last-child) {
-        border-bottom-color: rgba(255, 255, 255, 0.06);
-      }
-    }
+.row-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.row-desc {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.row-control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── Accent swatches ──────────────────────────────────────────────────────────
+// The token variables are scoped to <body>, so a swatch cannot read the accent
+// it represents — each states its own colour at the same lightness the theme
+// would produce.
+.swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+
+  &[data-accent='signal-blue'] {
+    background: oklch(0.55 0.16 250);
+  }
+
+  &[data-accent='slate-teal'] {
+    background: oklch(0.55 0.16 200);
+  }
+
+  &[data-accent='ink-violet'] {
+    background: oklch(0.55 0.16 288);
+  }
+
+  &[data-accent='graphite'] {
+    background: #43403b;
+  }
+
+  // Selection is a ring outside the swatch, so it never alters the colour
+  // the user is judging.
+  &.on {
+    box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--ink-2);
+  }
+}
+
+:host-context(.dark-theme) .swatch {
+  &[data-accent='signal-blue'] {
+    background: oklch(0.72 0.16 250);
+  }
+
+  &[data-accent='slate-teal'] {
+    background: oklch(0.72 0.16 200);
+  }
+
+  &[data-accent='ink-violet'] {
+    background: oklch(0.72 0.16 288);
+  }
+
+  &[data-accent='graphite'] {
+    background: #c9c5be;
+  }
+}
+
+// ── OpenAI key ───────────────────────────────────────────────────────────────
+.key-area {
+  width: 100%;
+}
+
+.key-set,
+.key-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-set .ms.ok {
+  font-size: 17px;
+  color: var(--pass);
+}
+
+.key-mask {
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-right: auto;
+}
+
+.key-entry .f-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+// ── About ────────────────────────────────────────────────────────────────────
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 12px;
+}
+
+.about-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.about-version {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.about-blurb {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.about-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.about-row {
+  display: flex;
+  font-size: 12px;
+
+  .k {
+    color: var(--ink-3);
+    width: 150px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .row {
+    flex-direction: column;
+    gap: 12px;
   }
 }

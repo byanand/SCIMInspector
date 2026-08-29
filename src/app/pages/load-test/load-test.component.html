@@ -1,219 +1,160 @@
-<div class="load-test">
-  <div class="header">
-    <div class="header-actions">
-      @if (running()) {
-        <button mat-raised-button color="warn" (click)="stopLoadTest()">
-          <mat-icon>stop</mat-icon> Stop Test
-        </button>
-      } @else {
-        <button mat-raised-button color="primary" (click)="startLoadTest()" [disabled]="!serverConfigService.selectedConfig() || selectedScenarios().size === 0">
-          <mat-icon>rocket_launch</mat-icon> Start Load Test
+<ng-template appPageActions>
+  <app-button
+    icon="play_arrow"
+    kind="primary"
+    busyKey="loadtest"
+    busyLabel="Running…"
+    (press)="startLoadTest()">
+    Start load test
+  </app-button>
+</ng-template>
+
+<div class="page">
+  <!-- ── Run configuration ──────────────────────────────────────────────── -->
+  <div class="config">
+    <label class="f-field narrow">
+      <span class="f-label">Total requests</span>
+      <input
+        class="f-input mono"
+        type="number"
+        min="1"
+        [ngModel]="totalRequests()"
+        (ngModelChange)="totalRequests.set(+$event)" />
+    </label>
+
+    <label class="f-field narrow">
+      <span class="f-label">Concurrency</span>
+      <input
+        class="f-input mono"
+        type="number"
+        min="1"
+        [ngModel]="concurrency()"
+        (ngModelChange)="concurrency.set(+$event)" />
+    </label>
+
+    <label class="f-field narrow">
+      <span class="f-label">Ramp-up (s)</span>
+      <input
+        class="f-input mono"
+        type="number"
+        min="0"
+        [ngModel]="rampUpSeconds()"
+        (ngModelChange)="rampUpSeconds.set(+$event)" />
+    </label>
+
+    <div class="config-hint">{{ configHint() }} 0 = all at once.</div>
+
+    <div class="config-count">
+      {{ scenarioCount() }} {{ scenarioCount() === 1 ? 'scenario' : 'scenarios' }} selected
+    </div>
+  </div>
+
+  <!-- ── Scenarios ──────────────────────────────────────────────────────── -->
+  <div>
+    <div class="eyebrow section-label">Scenarios</div>
+    <div class="scenarios">
+      @for (s of scenarios; track s.id) {
+        <button
+          type="button"
+          class="scenario"
+          [class.on]="isScenarioSelected(s.id)"
+          [attr.aria-pressed]="isScenarioSelected(s.id)"
+          (click)="toggleScenario(s.id)">
+          <span class="s-head">
+            <span class="ms s-icon" aria-hidden="true">{{ s.icon }}</span>
+            <span class="s-name">{{ s.name }}</span>
+            <span class="ms s-check" aria-hidden="true">
+              {{ isScenarioSelected(s.id) ? 'check_circle' : 'radio_button_unchecked' }}
+            </span>
+          </span>
+          <p class="s-desc">{{ s.description }}</p>
+          <span class="s-ops">
+            @for (op of s.operations; track op) {
+              <span class="s-op mono">{{ op }}</span>
+            }
+          </span>
         </button>
       }
     </div>
   </div>
 
-  <!-- Configuration -->
-  <mat-card class="config-card">
-    <mat-card-header>
-      <mat-card-title>Test Configuration</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="config-grid">
-        <mat-form-field appearance="outline">
-          <mat-label>Total Requests</mat-label>
-          <input matInput type="number" [ngModel]="totalRequests()" (ngModelChange)="totalRequests.set($event)" min="1">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Concurrency</mat-label>
-          <input matInput type="number" [ngModel]="concurrency()" (ngModelChange)="concurrency.set($event)" min="1">
-          <mat-hint>Simultaneous requests</mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Ramp-Up (seconds)</mat-label>
-          <input matInput type="number" [ngModel]="rampUpSeconds()" (ngModelChange)="rampUpSeconds.set($event)" min="0">
-          <mat-hint>0 = all at once</mat-hint>
-        </mat-form-field>
+  <!-- ── Live progress ──────────────────────────────────────────────────── -->
+  @if (running() && progress(); as p) {
+    <div class="live">
+      <span class="live-phase">{{ p.phase }}</span>
+      <span class="live-count mono tnum">
+        {{ p.completed.toLocaleString() }} / {{ p.total.toLocaleString() }}
+      </span>
+      <div class="live-track">
+        <div class="live-fill" [style.width.%]="progressPercent()"></div>
       </div>
-
-      <mat-divider></mat-divider>
-
-      <div class="scenario-section">
-        <h3>Test Scenarios <span class="selected-count">({{ selectedScenarios().size }} selected)</span></h3>
-
-        <h4 class="scenario-group-label"><mat-icon>person</mat-icon> User Scenarios</h4>
-        <div class="scenario-cards">
-          @for (s of userScenarios; track s.id) {
-            <div class="scenario-card" [class.selected]="isScenarioSelected(s.id)" (click)="selectScenario(s.id)">
-              <div class="scenario-card-header">
-                <mat-icon>{{ s.icon }}</mat-icon>
-                <span class="scenario-name">{{ s.name }}</span>
-                @if (isScenarioSelected(s.id)) {
-                  <mat-icon class="check-icon">check_circle</mat-icon>
-                }
-              </div>
-              <p class="scenario-desc">{{ s.description }}</p>
-              <div class="scenario-ops">
-                @for (op of s.operations; track op) {
-                  <span class="op-badge">{{ op }}</span>
-                }
-              </div>
-            </div>
-          }
-        </div>
-
-        <h4 class="scenario-group-label"><mat-icon>group</mat-icon> Group Scenarios</h4>
-        <div class="scenario-cards">
-          @for (s of groupScenarios; track s.id) {
-            <div class="scenario-card" [class.selected]="isScenarioSelected(s.id)" (click)="selectScenario(s.id)">
-              <div class="scenario-card-header">
-                <mat-icon>{{ s.icon }}</mat-icon>
-                <span class="scenario-name">{{ s.name }}</span>
-                @if (isScenarioSelected(s.id)) {
-                  <mat-icon class="check-icon">check_circle</mat-icon>
-                }
-              </div>
-              <p class="scenario-desc">{{ s.description }}</p>
-              <div class="scenario-ops">
-                @for (op of s.operations; track op) {
-                  <span class="op-badge">{{ op }}</span>
-                }
-              </div>
-            </div>
-          }
-        </div>
-      </div>
-    </mat-card-content>
-  </mat-card>
-
-  <!-- Progress -->
-  @if (running()) {
-    <mat-card class="progress-card">
-      <mat-card-content>
-        <div class="progress-header">
-          <span class="phase-label">{{ progress()?.phase || 'Running' }}</span>
-          <span>{{ progress()?.completed || 0 }} / {{ progress()?.total || 0 }}</span>
-          <span>{{ $safeNavigationMigration(progress()?.current_rps) | number:'1.1-1' }} req/s</span>
-          @if ((progress()?.error_count ?? 0) > 0) {
-            <span class="error-count">{{ progress()?.error_count }} errors</span>
-          }
-        </div>
-        <mat-progress-bar mode="determinate" [value]="getProgressPercent()"></mat-progress-bar>
-      </mat-card-content>
-    </mat-card>
+      <span class="live-stat mono">{{ p.current_rps.toFixed(1) }} rps</span>
+      @if (p.error_count > 0) {
+        <span class="live-stat mono bad">{{ p.error_count }} errors</span>
+      }
+      <button type="button" class="stop" (click)="stopLoadTest()">
+        <span class="ms" aria-hidden="true">stop</span>
+        Stop
+      </button>
+    </div>
   }
 
-  <!-- Results Summary -->
-  @if (summary()) {
-    <div class="results-summary">
-      <mat-card class="metric-card">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.total_requests }}</div>
-          <div class="metric-label">Total Requests</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="metric-card">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.requests_per_second | number:'1.1-1' }}</div>
-          <div class="metric-label">Requests/sec</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="metric-card">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.avg_latency_ms | number:'1.0-0' }}ms</div>
-          <div class="metric-label">Avg Latency</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="metric-card">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.p95_latency_ms | number:'1.0-0' }}ms</div>
-          <div class="metric-label">P95 Latency</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="metric-card">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.p99_latency_ms | number:'1.0-0' }}ms</div>
-          <div class="metric-label">P99 Latency</div>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card class="metric-card" [class.error-rate]="summary()!.error_rate > 0">
-        <mat-card-content>
-          <div class="metric-value">{{ summary()!.error_rate | number:'1.1-1' }}%</div>
-          <div class="metric-label">Error Rate</div>
-        </mat-card-content>
-      </mat-card>
+  <!-- ── Results ────────────────────────────────────────────────────────── -->
+  @if (summary(); as s) {
+    <div class="metrics">
+      @for (m of metrics(); track m.label) {
+        <div class="metric">
+          <div class="m-label">{{ m.label }}</div>
+          <div class="m-value tnum" [style.color]="m.color || null">{{ m.value }}</div>
+        </div>
+      }
     </div>
 
-    <div class="latency-details">
-      <mat-card>
-        <mat-card-header><mat-card-title>Latency Breakdown</mat-card-title></mat-card-header>
-        <mat-card-content>
-          <div class="latency-grid">
-            <div class="latency-item">
-              <span class="latency-label">Min</span>
-              <span class="latency-value">{{ summary()!.min_latency_ms | number:'1.0-0' }}ms</span>
+    <div class="charts">
+      <app-panel title="Latency distribution">
+        <div class="bars">
+          @for (b of latencyBars(); track b.label) {
+            <div class="bar-col">
+              <span class="bar-value mono">{{ b.value }}</span>
+              <div class="bar" [style.height.px]="b.height" [style.background]="b.color"></div>
+              <span class="bar-label mono">{{ b.label }}</span>
             </div>
-            <div class="latency-item">
-              <span class="latency-label">Avg</span>
-              <span class="latency-value">{{ summary()!.avg_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">P50</span>
-              <span class="latency-value">{{ summary()!.p50_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">P75</span>
-              <span class="latency-value">{{ summary()!.p75_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">P90</span>
-              <span class="latency-value">{{ summary()!.p90_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">P95</span>
-              <span class="latency-value">{{ summary()!.p95_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">P99</span>
-              <span class="latency-value">{{ summary()!.p99_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
-            <div class="latency-item">
-              <span class="latency-label">Max</span>
-              <span class="latency-value">{{ summary()!.max_latency_ms | number:'1.0-0' }}ms</span>
-            </div>
+          }
+        </div>
+      </app-panel>
+
+      <app-panel title="Status codes">
+        <div class="status">
+          <div class="status-bar">
+            @for (sl of statusSlices(); track sl.code) {
+              <span [style.width.%]="sl.pct" [style.background]="sl.color"></span>
+            }
           </div>
-        </mat-card-content>
-      </mat-card>
-    </div>
 
-    <!-- Charts -->
-    <div class="charts-grid">
-      <mat-card>
-        <mat-card-content>
-          <canvas baseChart
-            [data]="latencyChartData()"
-            [options]="latencyChartOptions"
-            type="bar">
-          </canvas>
-        </mat-card-content>
-      </mat-card>
-
-      <mat-card>
-        <mat-card-content>
-          <canvas baseChart
-            [data]="statusChartData()"
-            [options]="statusChartOptions"
-            type="doughnut">
-          </canvas>
-        </mat-card-content>
-      </mat-card>
+          @for (sl of statusSlices(); track sl.code) {
+            <div class="status-row">
+              <span class="dot" [style.background]="sl.color"></span>
+              <span class="s-code mono">{{ sl.code }}</span>
+              <span class="s-pct">{{ sl.label }}</span>
+              <span class="s-count mono tnum">{{ sl.count.toLocaleString() }}</span>
+            </div>
+          }
+        </div>
+      </app-panel>
     </div>
+  } @else if (!running()) {
+    <app-empty-state
+      icon="speed"
+      title="No results yet"
+      detail="Pick the scenarios to exercise, set concurrency, and start the run.">
+      <app-button
+        icon="play_arrow"
+        kind="primary"
+        busyKey="loadtest"
+        busyLabel="Running…"
+        (press)="startLoadTest()">
+        Start load test
+      </app-button>
+    </app-empty-state>
   }
 </div>
