@@ -3,6 +3,7 @@ import { SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { Router } from '@angular/router';
 import { MonacoEditorModule } from 'ngx-monaco-editor-v2';
 import { TauriService } from '../../services/tauri.service';
 import { NotificationService } from '../../services/notification.service';
@@ -307,6 +308,7 @@ export class ExplorerComponent implements OnInit, OnDestroy {
   private themeService = inject(ThemeService);
   scimSchemaService = inject(ScimSchemaService);
   readonly busy = inject(BusyService);
+  private router = inject(Router);
 
   // Monaco editor
   monacoEditor: any = null;
@@ -541,6 +543,44 @@ export class ExplorerComponent implements OnInit, OnDestroy {
       const key = await this.tauriService.getAppSetting('openai_api_key');
       this.hasOpenAiKey.set(!!key);
     } catch { /* ignore */ }
+
+    this.applyHandoff();
+  }
+
+  /**
+   * Picks up a request handed over from Validation's "Open in Explorer", so a
+   * failing test can be re-sent and edited here without retyping it.
+   */
+  private applyHandoff(): void {
+    const state = this.router.getCurrentNavigation()?.extras.state
+      ?? (history.state as Record<string, unknown> | undefined);
+    if (!state || typeof state['path'] !== 'string') return;
+
+    const method = typeof state['method'] === 'string' ? state['method'] : 'GET';
+    const path = state['path'];
+    const body = typeof state['body'] === 'string' ? state['body'] : '';
+
+    // Preselect the operation whose verb and shape match, so the rail shows
+    // where the request came from; fall back to a bare ad-hoc request.
+    const match = this.operations.find(
+      (o) => o.method === method && this.pathShapeMatches(o.pathTemplate, path)
+    );
+    if (match) {
+      this.selectOperation(match);
+    }
+
+    this.httpMethod.set(method);
+    this.requestPath.set(path);
+    if (body) this.requestBody.set(body);
+    this.response.set(null);
+  }
+
+  /** Compares a path against a template, treating {id} as a wildcard segment. */
+  private pathShapeMatches(template: string, path: string): boolean {
+    const t = template.split('?')[0].split('/').filter(Boolean);
+    const p = path.split('?')[0].split('/').filter(Boolean);
+    if (t.length !== p.length) return false;
+    return t.every((seg, i) => seg.startsWith('{') || seg === p[i]);
   }
 
   async loadFieldMappings(serverConfigId: string) {
