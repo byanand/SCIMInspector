@@ -210,6 +210,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  // Long labels ellipsize rather than widening the list into a horizontal
+  // scrollbar across the sidebar foot.
+  overflow-x: hidden;
   padding: 0 8px;
 }
 

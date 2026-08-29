@@ -1,0 +1,184 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Form controls.
+//
+// These are global classes on native elements rather than wrapper components:
+// the app has ~30 form fields already bound with ngModel, and MDC's outlined
+// form-field cannot be reshaped into the design's 34px flat control without
+// deep overrides. A native <input class="f-input"> keeps two-way binding,
+// validation and autofill working while matching the design exactly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A label stacked over its control, with an optional hint beneath.
+.f-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.f-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+
+  // Required marker, per the design's `*` convention.
+  &.req::after {
+    content: ' *';
+    color: var(--fail);
+  }
+}
+
+.f-hint {
+  font-size: 11px;
+  color: var(--ink-3);
+  text-wrap: pretty;
+}
+
+.f-error {
+  font-size: 11px;
+  color: var(--fail);
+}
+
+// Shared control chrome.
+%control {
+  height: var(--row);
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: Archivo, 'Helvetica Neue', sans-serif;
+  font-size: 12.5px;
+  outline: none;
+  width: 100%;
+  min-width: 0;
+
+  &::placeholder {
+    color: var(--ink-3);
+  }
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: var(--ink-3);
+  }
+
+  // Selection and focus are a ring, not elevation — the design's one
+  // substitute for shadow.
+  &:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+    background: var(--panel-2);
+  }
+
+  &.invalid {
+    border-color: var(--fail);
+
+    &:focus {
+      box-shadow: 0 0 0 1px var(--fail);
+    }
+  }
+}
+
+.f-input {
+  @extend %control;
+}
+
+.f-select {
+  @extend %control;
+
+  padding: 0 8px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% + 1px),
+    calc(100% - 9px) calc(50% + 1px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+
+  option {
+    background: var(--panel);
+    color: var(--ink);
+  }
+}
+
+.f-textarea {
+  @extend %control;
+
+  height: auto;
+  min-height: 88px;
+  padding: 9px 10px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+// Wire data — URLs, tokens, SCIM attribute paths — is always mono.
+.f-input.mono,
+.f-select.mono,
+.f-textarea.mono {
+  font-family: 'Roboto Mono', 'Cascadia Code', monospace;
+  font-size: 12px;
+}
+
+// A control with a leading glyph, e.g. the Explorer's operation filter.
+.f-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  background: var(--panel-2);
+
+  &:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .ms {
+    font-size: 16px;
+    color: var(--ink-3);
+    flex-shrink: 0;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12px;
+
+    &::placeholder {
+      color: var(--ink-3);
+    }
+  }
+}
+
+// Form layout helpers matching the design's two-column grids.
+.f-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.f-span {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 860px) {
+  .f-grid {
+    grid-template-columns: 1fr;
+  }
+}

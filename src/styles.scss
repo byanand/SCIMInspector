@@ -1,6 +1,7 @@
 @use '@angular/material' as mat;
 @use './app/styles/tokens';
 @use './app/styles/semantic';
+@use './app/styles/controls';
 
 // Angular Material is retained only for overlay-behaviour components — tooltip,
 // snackbar, dialog, menu — plus mat-icon. Everything else is hand-rolled in
