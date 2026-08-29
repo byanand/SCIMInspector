@@ -3,6 +3,15 @@
 @use './app/styles/semantic';
 @use './app/styles/controls';
 
+// Border-box everywhere. The design assumes it — a control declared 132px wide
+// is 132px including its padding and border, not 154px — and without it every
+// input, select and textarea overflows the field that sizes it.
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 // Angular Material is retained only for overlay-behaviour components — tooltip,
 // snackbar, dialog, menu — plus mat-icon. Everything else is hand-rolled in
 // src/app/ui to match the redesign, which Material's MDC internals cannot reach.
