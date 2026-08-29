@@ -20,6 +20,6 @@ describe('App', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.app-title')?.textContent).toContain('SCIM Inspector');
+    expect(compiled.querySelector('.wordmark')?.textContent).toContain('SCIM Inspector');
   });
 });

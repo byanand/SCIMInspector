@@ -1,95 +1,211 @@
-<mat-sidenav-container class="app-container">
-  <mat-sidenav
-    [mode]="isNarrow() ? 'over' : 'side'"
-    [opened]="sidenavOpened()"
-    (openedChange)="sidenavOpened.set($event)"
-    class="app-sidenav">
-    <div class="sidenav-header">
-      <mat-icon class="app-logo">security</mat-icon>
-      <span class="app-title">SCIM Inspector</span>
-    </div>
-    <mat-nav-list>
-      @for (item of navItems; track item.path) {
-        <a mat-list-item [routerLink]="item.path" routerLinkActive="active-link" (click)="onNavClick()">
-          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-          <span matListItemTitle>{{ item.label }}</span>
-        </a>
-      }
-    </mat-nav-list>
-  </mat-sidenav>
-
-  <mat-sidenav-content class="app-content">
-    <mat-toolbar class="app-toolbar">
-      @if (isNarrow()) {
-        <button mat-icon-button class="sidenav-toggle" (click)="toggleSidenav()" aria-label="Toggle navigation">
-          <mat-icon>menu</mat-icon>
+<div class="shell">
+  <!-- ══ SIDEBAR ══ -->
+  @if (!navCollapsed()) {
+    <aside class="sidebar">
+      <div class="brand">
+        <app-brand-mark [size]="24" />
+        <span class="wordmark">SCIM Inspector</span>
+        <button
+          type="button"
+          class="icon-slot"
+          (click)="toggleNav()"
+          matTooltip="Collapse sidebar"
+          aria-label="Collapse sidebar">
+          <span class="ms" aria-hidden="true">left_panel_close</span>
         </button>
-      }
-      <span class="toolbar-page-title">{{ currentPageTitle() }}</span>
-      <span class="toolbar-spacer"></span>
-
-      <!-- Global Server Selector + Schema Status -->
-      <div class="toolbar-server-selector"
-        [matTooltip]="(serverConfigService.selectedConfig()?.base_url) ?? ''"
-        matTooltipPosition="below">
-        @if (serverConfigService.serverConfigs().length > 0) {
-          <mat-icon class="server-icon">storage</mat-icon>
-          <mat-select
-            [ngModel]="serverConfigService.getSelectedId()"
-            (ngModelChange)="onServerChange($event)"
-            placeholder="Select server"
-            class="server-select"
-            panelClass="toolbar-server-panel">
-            @for (config of serverConfigService.serverConfigs(); track config.id) {
-              <mat-option [value]="config.id">
-                {{ config.name }}
-              </mat-option>
-            }
-          </mat-select>
-
-          <!-- Schema status inline -->
-          @if (scimSchemaService.schemaStatus() !== 'idle') {
-            <span class="toolbar-divider"></span>
-            @switch (scimSchemaService.schemaStatus()) {
-              @case ('loading') {
-                <mat-spinner diameter="16" matTooltip="Loading schemas..."></mat-spinner>
-              }
-              @case ('loaded') {
-                <mat-icon
-                  class="schema-loaded-icon"
-                  [matTooltip]="'Schemas loaded (' + scimSchemaService.schemaCount() + ' schemas)'">
-                  check_circle
-                </mat-icon>
-              }
-              @case ('error') {
-                <mat-icon
-                  class="schema-error-icon"
-                  [matTooltip]="'Schema fetch failed: ' + scimSchemaService.errorMessage()">
-                  warning
-                </mat-icon>
-              }
-            }
-            <button mat-icon-button class="schema-refresh-btn"
-              (click)="refreshSchemas()"
-              matTooltip="Refresh schemas"
-              [disabled]="scimSchemaService.schemaStatus() === 'loading'">
-              <mat-icon>sync</mat-icon>
-            </button>
-          }
-        } @else {
-          <a routerLink="/server-config" class="no-server-link">
-            <mat-icon>add_circle_outline</mat-icon>
-            <span>Add Server</span>
-          </a>
-        }
       </div>
 
-      <button mat-icon-button (click)="toggleTheme()" matTooltip="Toggle theme">
-        <mat-icon>{{ themeService.darkMode() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+      <!-- Active server. Replaces the old toolbar selector, and carries schema
+           status inline so the state and its refresh live together. -->
+      @if (serverConfigService.serverConfigs().length > 0) {
+        <div class="server-card">
+          <button type="button" class="server-pick" [matMenuTriggerFor]="serverMenu">
+            <div class="server-row">
+              <span class="eyebrow">Active server</span>
+              <span class="ms unfold" aria-hidden="true">unfold_more</span>
+            </div>
+            <div class="server-name">{{ serverConfigService.selectedConfig()?.name ?? 'Select server' }}</div>
+            <div class="server-url mono">{{ serverConfigService.selectedConfig()?.base_url ?? '—' }}</div>
+          </button>
+
+          <div class="server-schema">
+            @switch (scimSchemaService.schemaStatus()) {
+              @case ('loading') {
+                <span class="spinner sm" aria-hidden="true"></span>
+                <span class="schema-text">Loading schemas…</span>
+              }
+              @case ('loaded') {
+                <span class="ms pass" aria-hidden="true">check_circle</span>
+                <span class="schema-text">{{ scimSchemaService.schemaCount() }} schemas loaded</span>
+              }
+              @case ('error') {
+                <span class="ms warn" aria-hidden="true">warning</span>
+                <span class="schema-text" [matTooltip]="scimSchemaService.errorMessage()">Schema fetch failed</span>
+              }
+              @default {
+                <span class="ms muted" aria-hidden="true">remove</span>
+                <span class="schema-text">No schemas yet</span>
+              }
+            }
+            <button
+              type="button"
+              class="icon-slot sm"
+              (click)="refreshSchemas()"
+              [disabled]="scimSchemaService.schemaStatus() === 'loading'"
+              matTooltip="Refresh schemas"
+              aria-label="Refresh schemas">
+              <span class="ms" aria-hidden="true">refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <mat-menu #serverMenu="matMenu" class="server-menu">
+          @for (config of serverConfigService.serverConfigs(); track config.id) {
+            <button mat-menu-item (click)="onServerChange(config.id)">
+              <span class="menu-name">{{ config.name }}</span>
+              <span class="menu-url mono">{{ config.base_url }}</span>
+            </button>
+          }
+        </mat-menu>
+      } @else {
+        <a class="server-card empty" routerLink="/server-config">
+          <span class="ms" aria-hidden="true">add_circle</span>
+          <div>
+            <div class="server-name">Add a server</div>
+            <div class="server-url">No profiles yet</div>
+          </div>
+        </a>
+      }
+
+      <nav class="nav" aria-label="Main">
+        @for (group of navGroups; track group.label) {
+          <div class="nav-group">
+            @if (group.label) {
+              <div class="eyebrow nav-label">{{ group.label }}</div>
+            }
+            @for (item of group.items; track item.path) {
+              <a
+                class="nav-item"
+                [routerLink]="item.path"
+                routerLinkActive="on">
+                <span class="ms" aria-hidden="true">{{ item.icon }}</span>
+                <span class="nav-text">{{ item.label }}</span>
+                @if (badgeFor(item.badge); as count) {
+                  <span class="nav-badge mono">{{ count }}</span>
+                }
+              </a>
+            }
+          </div>
+        }
+      </nav>
+
+      <div class="sidebar-foot">
+        <a class="nav-item flex" routerLink="/settings" routerLinkActive="on">
+          <span class="ms" aria-hidden="true">settings</span>
+          <span class="nav-text">Settings</span>
+        </a>
+        <button
+          type="button"
+          class="icon-slot"
+          (click)="toggleTheme()"
+          matTooltip="Toggle theme"
+          aria-label="Toggle theme">
+          <span class="ms" aria-hidden="true">{{ themeService.darkMode() ? 'light_mode' : 'dark_mode' }}</span>
+        </button>
+      </div>
+    </aside>
+  }
+
+  <!-- ══ COLLAPSED RAIL ══ -->
+  @if (navCollapsed()) {
+    <aside class="rail">
+      <div class="rail-head">
+        <app-brand-mark [size]="26" />
+        <button
+          type="button"
+          class="icon-slot"
+          (click)="toggleNav()"
+          matTooltip="Expand sidebar"
+          aria-label="Expand sidebar">
+          <span class="ms" aria-hidden="true">left_panel_open</span>
+        </button>
+      </div>
+
+      <button
+        type="button"
+        class="rail-server"
+        (click)="toggleNav()"
+        [matTooltip]="serverConfigService.selectedConfig()?.name ?? 'No server'"
+        aria-label="Active server">
+        <span class="ms" aria-hidden="true">dns</span>
+        <span class="dot" [class.ok]="scimSchemaService.schemaStatus() === 'loaded'"></span>
       </button>
-    </mat-toolbar>
-    <div class="page-content">
-      <router-outlet />
+
+      <nav class="rail-nav" aria-label="Main">
+        @for (item of navFlat; track item.path) {
+          <a
+            class="rail-item"
+            [routerLink]="item.path"
+            routerLinkActive="on"
+            [matTooltip]="item.label"
+            matTooltipPosition="right">
+            <span class="ms" aria-hidden="true">{{ item.icon }}</span>
+          </a>
+        }
+      </nav>
+
+      <div class="rail-foot">
+        <a
+          class="rail-item"
+          routerLink="/settings"
+          routerLinkActive="on"
+          matTooltip="Settings"
+          matTooltipPosition="right">
+          <span class="ms" aria-hidden="true">settings</span>
+        </a>
+        <button
+          type="button"
+          class="rail-item"
+          (click)="toggleTheme()"
+          matTooltip="Toggle theme"
+          matTooltipPosition="right"
+          aria-label="Toggle theme">
+          <span class="ms" aria-hidden="true">{{ themeService.darkMode() ? 'light_mode' : 'dark_mode' }}</span>
+        </button>
+      </div>
+    </aside>
+  }
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+    <header class="page-head">
+      <div class="page-heading">
+        <h1>{{ pageTitle() }}</h1>
+        <p>{{ pageBlurb() }}</p>
+      </div>
+      <div class="page-actions">
+        @if (pageHeader.actions(); as tpl) {
+          <ng-container [ngTemplateOutlet]="tpl" />
+        }
+      </div>
+    </header>
+
+    <!-- Global busy bar — one operation at a time, and it says which. -->
+    @if (busy.busy()) {
+      <div class="busy-bar" role="progressbar" [attr.aria-label]="busy.label()">
+        <span class="busy-fill"></span>
+      </div>
+      <div class="busy-note">
+        <span>{{ busy.label() }}</span>
+      </div>
+    }
+
+    <div class="page-scroll">
+      @if (showSetup()) {
+        <app-setup-checklist [blurb]="setupBlurb()" />
+      } @else {
+        <router-outlet />
+      }
     </div>
-  </mat-sidenav-content>
-</mat-sidenav-container>
+  </main>
+</div>

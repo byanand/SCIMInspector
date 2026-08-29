@@ -1,0 +1,25 @@
+<div class="wrap">
+  <div class="col">
+    <span class="ms glyph" aria-hidden="true">dns</span>
+    <h2>No server selected</h2>
+    <p class="lede">{{ blurb() }}</p>
+
+    <ol class="steps">
+      @for (step of steps; track step.title; let i = $index) {
+        <li class="step" [class.next]="!!step.action">
+          <span class="mark" aria-hidden="true">{{ i + 1 }}</span>
+          <div class="body">
+            <div class="title">{{ step.title }}</div>
+            <div class="detail">{{ step.detail }}</div>
+          </div>
+          @if (step.action) {
+            <a class="go" routerLink="/server-config">
+              {{ step.action }}
+              <span class="ms" aria-hidden="true">arrow_forward</span>
+            </a>
+          }
+        </li>
+      }
+    </ol>
+  </div>
+</div>

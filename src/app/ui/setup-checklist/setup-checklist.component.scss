@@ -1,0 +1,112 @@
+.wrap {
+  padding: 56px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.col {
+  max-width: 520px;
+  width: 100%;
+}
+
+.glyph {
+  font-size: 28px;
+  color: var(--line-2);
+}
+
+h2 {
+  margin: 12px 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.lede {
+  margin: 0 0 22px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+
+  .step.next & {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+}
+
+.body {
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.detail {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.go {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--accent-hover);
+    color: var(--accent-ink);
+  }
+
+  .ms {
+    font-size: 15px;
+  }
+}

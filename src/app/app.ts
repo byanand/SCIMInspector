@@ -1,21 +1,22 @@
-import { Component, OnInit, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router, NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { BreakpointObserver } from '@angular/cdk/layout';
-import { filter } from 'rxjs/operators';
-import { FormsModule } from '@angular/forms';
-import { MatSidenavModule } from '@angular/material/sidenav';
-import { MatToolbarModule } from '@angular/material/toolbar';
-import { MatListModule } from '@angular/material/list';
-import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
+import { NgTemplateOutlet } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs/operators';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSelectModule } from '@angular/material/select';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatMenuModule } from '@angular/material/menu';
 import { ThemeService } from './services/theme.service';
 import { ServerConfigService } from './services/server-config.service';
 import { ScimSchemaService } from './services/scim-schema.service';
 import { UpdateService } from './services/update.service';
+import { BusyService } from './services/busy.service';
+import { PageHeaderService } from './services/page-header.service';
+import { NavCountsService } from './services/nav-counts.service';
+import { BrandMarkComponent } from './ui/brand-mark/brand-mark.component';
+import { SetupChecklistComponent } from './ui/setup-checklist/setup-checklist.component';
+import { NAV_GROUPS, NAV_FLAT, PAGES, GATED_ROUTES, SETUP_BLURBS, NavItem } from './app.nav';
+
+const NAV_COLLAPSED_KEY = 'scim-inspector-nav-collapsed';
 
 @Component({
   selector: 'app-root',
@@ -23,94 +24,104 @@ import { UpdateService } from './services/update.service';
     RouterOutlet,
     RouterLink,
     RouterLinkActive,
-    FormsModule,
-    MatSidenavModule,
-    MatToolbarModule,
-    MatListModule,
-    MatIconModule,
-    MatButtonModule,
+    NgTemplateOutlet,
     MatTooltipModule,
-    MatSelectModule,
-    MatFormFieldModule,
-    MatProgressSpinnerModule,
+    MatMenuModule,
+    BrandMarkComponent,
+    SetupChecklistComponent,
   ],
   templateUrl: './app.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
-  navItems = [
-    { path: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { path: '/server-config', icon: 'dns', label: 'Server Config' },
-    { path: '/explorer', icon: 'send', label: 'Explorer' },
-    { path: '/field-mapping', icon: 'account_tree', label: 'Field Mapping' },
-    { path: '/sample-data', icon: 'dataset', label: 'Sample Data' },
-    { path: '/validation', icon: 'verified', label: 'Validation' },
-    { path: '/load-test', icon: 'speed', label: 'Load Test' },
-    { path: '/reports', icon: 'assessment', label: 'Reports' },
-    { path: '/settings', icon: 'settings', label: 'Settings' },
-  ];
+  readonly navGroups = NAV_GROUPS;
+  readonly navFlat = NAV_FLAT;
 
-  scimSchemaService = inject(ScimSchemaService);
-  private updateService = inject(UpdateService);
-  private router = inject(Router);
-  private breakpoints = inject(BreakpointObserver);
-  currentPageTitle = signal('Dashboard');
+  readonly themeService = inject(ThemeService);
+  readonly serverConfigService = inject(ServerConfigService);
+  readonly scimSchemaService = inject(ScimSchemaService);
+  readonly busy = inject(BusyService);
+  readonly pageHeader = inject(PageHeaderService);
+  readonly counts = inject(NavCountsService);
 
-  // Below this width the sidenav becomes an overlay drawer toggled by the
-  // toolbar hamburger; at or above it the drawer is a permanent side panel.
-  isNarrow = signal(false);
-  sidenavOpened = signal(true);
+  private readonly updateService = inject(UpdateService);
+  private readonly router = inject(Router);
 
-  constructor(
-    public themeService: ThemeService,
-    public serverConfigService: ServerConfigService
-  ) {
-    // Collapse the sidenav into an overlay on small viewports.
-    this.breakpoints.observe('(max-width: 960px)').subscribe((state) => {
-      this.isNarrow.set(state.matches);
-      this.sidenavOpened.set(!state.matches);
-    });
+  /** Current top-level route, e.g. '/explorer'. */
+  private readonly activePath = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => '/' + (e.urlAfterRedirects.split('/').filter(Boolean)[0] ?? 'dashboard'))
+    ),
+    { initialValue: '/dashboard' }
+  );
 
-    // Track the active route to set the toolbar page title
-    this.router.events
-      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe((e) => {
-        const path = '/' + e.urlAfterRedirects.split('/').filter(Boolean)[0];
-        const nav = this.navItems.find((n) => n.path === path);
-        this.currentPageTitle.set(nav?.label ?? '');
-      });
+  readonly navCollapsed = signal(localStorage.getItem(NAV_COLLAPSED_KEY) === '1');
 
-    // Auto-fetch schemas when the selected server changes
+  /**
+   * A gated screen with no saved profile shows the setup checklist rather than
+   * an empty form the user cannot act on.
+   */
+  readonly showSetup = computed(
+    () =>
+      this.serverConfigService.serverConfigs().length === 0 &&
+      GATED_ROUTES.has(this.activePath())
+  );
+
+  readonly setupBlurb = computed(() => SETUP_BLURBS[this.activePath()] ?? '');
+
+  readonly pageTitle = computed(
+    () => this.pageHeader.title() ?? PAGES[this.activePath()]?.title ?? ''
+  );
+
+  readonly pageBlurb = computed(
+    () => this.pageHeader.blurb() ?? PAGES[this.activePath()]?.blurb ?? ''
+  );
+
+  constructor() {
+    // Auto-fetch schemas when the selected server changes.
     effect(() => {
       const config = this.serverConfigService.selectedConfig();
       if (config) {
-        this.scimSchemaService.fetchSchemas(config.id);
+        void this.scimSchemaService.fetchSchemas(config.id);
       } else {
         this.scimSchemaService.reset();
       }
     });
+
+    // A drill-in heading belongs to the view that set it, not to the next one.
+    effect(() => {
+      this.activePath();
+      this.pageHeader.setHeading(null, null);
+    });
   }
 
   ngOnInit(): void {
-    this.serverConfigService.loadConfigs();
+    void this.serverConfigService.loadConfigs();
+    void this.counts.refreshRuns();
     // Fire-and-forget: throttled internally and silent on failure.
-    this.updateService.checkOnStartup();
+    void this.updateService.checkOnStartup();
+  }
+
+  badgeFor(badge: NavItem['badge']): number | null {
+    if (!badge) return null;
+    const value = {
+      servers: this.counts.servers$(),
+      rules: this.counts.rules(),
+      samples: this.counts.samples(),
+      runs: this.counts.runs(),
+    }[badge];
+    return value > 0 ? value : null;
   }
 
   toggleTheme(): void {
     this.themeService.toggle();
   }
 
-  toggleSidenav(): void {
-    this.sidenavOpened.update((v) => !v);
-  }
-
-  // Close the overlay drawer after navigating on small viewports.
-  onNavClick(): void {
-    if (this.isNarrow()) {
-      this.sidenavOpened.set(false);
-    }
+  toggleNav(): void {
+    this.navCollapsed.update((v) => !v);
+    localStorage.setItem(NAV_COLLAPSED_KEY, this.navCollapsed() ? '1' : '0');
   }
 
   onServerChange(id: string): void {
@@ -118,6 +129,6 @@ export class App implements OnInit {
   }
 
   refreshSchemas(): void {
-    this.scimSchemaService.refreshSchemas();
+    void this.scimSchemaService.refreshSchemas();
   }
 }

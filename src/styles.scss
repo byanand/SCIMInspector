@@ -203,3 +203,31 @@ pre,
   border-radius: var(--radius) !important;
   box-shadow: none !important;
 }
+
+// The sidebar's server switcher stacks a name over its base URL, so its rows
+// are taller than a stock menu item and need the two lines laid out.
+.server-menu .mat-mdc-menu-item {
+  min-height: 0 !important;
+  padding: 7px 12px !important;
+
+  .mat-mdc-menu-item-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .menu-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .menu-url {
+    font-size: 10.5px;
+    color: var(--ink-3);
+  }
+
+  &:hover {
+    background: var(--panel-2) !important;
+  }
+}
