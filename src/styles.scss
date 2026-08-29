@@ -1,34 +1,37 @@
-
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
+@use './app/styles/tokens';
+@use './app/styles/semantic';
 
+// Angular Material is retained only for overlay-behaviour components — tooltip,
+// snackbar, dialog, menu — plus mat-icon. Everything else is hand-rolled in
+// src/app/ui to match the redesign, which Material's MDC internals cannot reach.
+// The theme still has to be emitted so those components resolve their tokens.
 html {
   height: 100%;
+
   @include mat.theme((
     color: (
       primary: mat.$azure-palette,
       tertiary: mat.$blue-palette,
     ),
-    typography: Roboto,
+    typography: Archivo,
     density: 0,
   ));
 }
 
 body {
   color-scheme: light;
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
+  background-color: var(--desk);
+  color: var(--ink);
+  font-family: Archivo, 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
   margin: 0;
   height: 100%;
   overflow: hidden;
 }
 
-// Dark theme
 .dark-theme {
   @include mat.theme((
     color: (
@@ -36,19 +39,51 @@ body {
       tertiary: mat.$blue-palette,
       theme-type: dark,
     ),
-    typography: Roboto,
+    typography: Archivo,
     density: 0,
   ));
 
   color-scheme: dark;
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
+  background-color: var(--desk);
+  color: var(--ink);
 }
 
-// Scrollbar styling
+a {
+  color: var(--accent);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--accent-hover);
+  }
+}
+
+// ── Iconography ──────────────────────────────────────────────────────────────
+// The redesign moves from Material Icons (filled) to Material Symbols Outlined
+// at weight 300. Overriding mat-icon's font-family here retargets all ~146
+// existing <mat-icon> usages at once; ligature names are unchanged except for
+// the four nav glyphs, which are updated at their call sites.
+.material-icons,
+mat-icon.mat-icon,
+.ms {
+  font-family: 'Material Symbols Outlined', 'Material Icons';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+// ── Scrollbars ───────────────────────────────────────────────────────────────
+// 10px with an inset thumb, so the track reads as empty rather than as a rail.
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -56,36 +91,115 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+  background: var(--line-2);
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--ink-3);
+    background-clip: content-box;
   }
 }
 
-.dark-theme ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.3);
+// ── Motion ───────────────────────────────────────────────────────────────────
+// The design's entire motion vocabulary: a spinner, the indeterminate busy bar,
+// and a pulse on in-flight labels. Nothing scales, lifts, or eases beyond this.
+@keyframes om-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-// Snackbar overrides
+@keyframes om-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@keyframes om-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+// ── Typography helpers ───────────────────────────────────────────────────────
+code,
+pre,
+.mono {
+  font-family: 'Roboto Mono', 'Cascadia Code', 'JetBrains Mono', monospace;
+}
+
+// Section eyebrow — the uppercase micro-label used above nav groups, stat
+// cards and panel headers throughout the design.
+.eyebrow {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+// Numerals in metrics must not reflow as values tick during a run.
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+// ── Material overlay components ──────────────────────────────────────────────
+// Retained components are re-pointed at the design tokens so they don't stay
+// Material-blue on a warm-neutral surface.
+.mat-mdc-tooltip .mdc-tooltip__surface {
+  background: var(--ink) !important;
+  color: var(--panel) !important;
+  font-family: Archivo, sans-serif !important;
+  font-size: 11.5px !important;
+  border-radius: 5px !important;
+}
+
+.mat-mdc-snack-bar-container .mdc-snackbar__surface {
+  border-radius: var(--radius) !important;
+}
+
 .snack-success .mdc-snackbar__surface {
-  background-color: #2e7d32 !important;
+  background-color: var(--pass) !important;
 }
 
 .snack-error .mdc-snackbar__surface {
-  background-color: #c62828 !important;
+  background-color: var(--fail) !important;
 }
 
 .snack-info .mdc-snackbar__surface {
-  background-color: #1565c0 !important;
+  background-color: var(--accent) !important;
 }
 
-// Code and monospace
-code, pre {
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+.mat-mdc-dialog-surface {
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--line);
+  box-shadow: none !important;
+}
+
+.mat-mdc-menu-panel {
+  background: var(--panel) !important;
+  border: 1px solid var(--line);
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
 }

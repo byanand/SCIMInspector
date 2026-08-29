@@ -1,0 +1,52 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain signals — HTTP method and response status.
+//
+// The design computes these from a hue per method rather than hand-picking
+// hexes (`METHOD_HUE` / `methodFg()` / `methodBg()` in the .dc.html script).
+// Emitting them as classes keeps that single source of truth while letting
+// templates bind `class="m-{{ method | lowercase }}"` off wire data.
+// ─────────────────────────────────────────────────────────────────────────────
+
+$method-hues: (
+  'get': 150,
+  'post': 250,
+  'put': 68,
+  'patch': 305,
+  'delete': 25,
+);
+
+@each $name, $hue in $method-hues {
+  .m-#{$name} {
+    --mfg: oklch(0.50 0.14 #{$hue});
+    --mbg: oklch(0.95 0.035 #{$hue});
+  }
+  .dark-theme .m-#{$name} {
+    --mfg: oklch(0.78 0.13 #{$hue});
+    --mbg: oklch(0.28 0.05 #{$hue});
+  }
+}
+
+// Unknown verbs fall back to the POST hue, matching `METHOD_HUE[m] ?? 250`.
+.m-unknown {
+  --mfg: oklch(0.50 0.14 250);
+  --mbg: oklch(0.95 0.035 250);
+}
+.dark-theme .m-unknown {
+  --mfg: oklch(0.78 0.13 250);
+  --mbg: oklch(0.28 0.05 250);
+}
+
+// Response status class. 2xx reads as pass, 3xx/4xx as warn, 5xx as fail —
+// the design treats a 404 as an expected answer, not a system failure.
+.s-pass {
+  --sfg: var(--pass);
+  --sbg: var(--pass-soft);
+}
+.s-warn {
+  --sfg: var(--warn);
+  --sbg: var(--warn-soft);
+}
+.s-fail {
+  --sfg: var(--fail);
+  --sbg: var(--fail-soft);
+}

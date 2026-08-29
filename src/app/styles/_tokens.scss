@@ -1,0 +1,139 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens — SCIM Inspector redesign.
+//
+// Ported verbatim from `SCIM Inspector Redesign.dc.html`. These supersede the
+// Material-2-era blues the pages used to type in directly (#1976d2 et al).
+//
+// Three axes are parameterised at runtime, matching the design's live props:
+//   theme    light | dark          → .dark-theme on <body>
+//   accent   4 named hues          → .accent-* on <body>
+//   density  comfortable | compact → .density-compact on <body>
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Accent hues. `graphite` is achromatic and handled separately below.
+$accent-hues: (
+  'signal-blue': 250,
+  'slate-teal': 200,
+  'ink-violet': 288,
+);
+
+// Emits the four accent tokens for one hue, per scheme.
+@mixin accent-for($hue, $dark: false) {
+  @if $dark {
+    --accent: oklch(0.72 0.16 #{$hue});
+    --accent-hover: oklch(0.78 0.16 #{$hue});
+    --accent-soft: oklch(0.28 0.05 #{$hue});
+    --accent-line: oklch(0.40 0.07 #{$hue});
+  } @else {
+    --accent: oklch(0.55 0.16 #{$hue});
+    --accent-hover: oklch(0.47 0.16 #{$hue});
+    --accent-soft: oklch(0.96 0.025 #{$hue});
+    --accent-line: oklch(0.86 0.06 #{$hue});
+  }
+}
+
+:root {
+  // Surfaces — warm paper neutrals, flat fills only.
+  --desk: #f2f1ee;
+  --panel: #fefefd;
+  --panel-2: #f7f6f4;
+  --line: #e4e2dd;
+  --line-2: #d2cfc8;
+
+  // Ink — three steps, primary through faintest.
+  --ink: #2b2926;
+  --ink-2: #6f6b64;
+  --ink-3: #97928a;
+
+  // Accent — default `signal blue`.
+  @include accent-for(250);
+  --accent-ink: #ffffff;
+
+  // Domain signals. Chroma is reserved for meaning.
+  --pass: oklch(0.52 0.13 150);
+  --pass-soft: oklch(0.96 0.03 150);
+  --fail: oklch(0.55 0.19 25);
+  --fail-soft: oklch(0.96 0.035 25);
+  --warn: oklch(0.62 0.13 68);
+  --warn-soft: oklch(0.96 0.04 68);
+
+  // Code surfaces and JSON syntax tokens.
+  --code-bg: #faf9f7;
+  --code-ink: #3a3835;
+  --tok-key: oklch(0.46 0.14 250);
+  --tok-str: oklch(0.44 0.11 150);
+  --tok-num: oklch(0.50 0.13 55);
+  --tok-bool: oklch(0.47 0.15 305);
+  --tok-punc: #a09a92;
+  --tok-urn: oklch(0.50 0.07 200);
+
+  // Metrics. --row is the shared control height; --pad the page gutter.
+  --row: 34px;
+  --pad: 20px;
+  --radius: 6px;
+}
+
+.dark-theme {
+  --desk: #17161a;
+  --panel: #1e1d21;
+  --panel-2: #252428;
+  --line: #302f34;
+  --line-2: #3d3c42;
+
+  --ink: #eceae6;
+  --ink-2: #a29d95;
+  --ink-3: #726d66;
+
+  @include accent-for(250, $dark: true);
+  --accent-ink: #14131a;
+
+  --pass: oklch(0.75 0.14 150);
+  --pass-soft: oklch(0.27 0.05 150);
+  --fail: oklch(0.72 0.16 25);
+  --fail-soft: oklch(0.28 0.06 25);
+  --warn: oklch(0.78 0.13 68);
+  --warn-soft: oklch(0.29 0.05 68);
+
+  --code-bg: #191819;
+  --code-ink: #d6d2cc;
+  --tok-key: oklch(0.80 0.11 250);
+  --tok-str: oklch(0.80 0.11 150);
+  --tok-num: oklch(0.82 0.12 68);
+  --tok-bool: oklch(0.78 0.12 305);
+  --tok-punc: #6f6a63;
+  --tok-urn: oklch(0.72 0.07 200);
+}
+
+// ── Accent variants ──────────────────────────────────────────────────────────
+// Chromatic accents key off a single hue; graphite drops chroma entirely and so
+// also restates --accent-ink, which the hue mixin leaves alone.
+@each $name, $hue in $accent-hues {
+  body.accent-#{$name} {
+    @include accent-for($hue);
+  }
+  body.accent-#{$name}.dark-theme {
+    @include accent-for($hue, $dark: true);
+  }
+}
+
+body.accent-graphite {
+  --accent: #43403b;
+  --accent-hover: #2b2926;
+  --accent-soft: #f0eeea;
+  --accent-line: #dedbd5;
+  --accent-ink: #ffffff;
+}
+
+body.accent-graphite.dark-theme {
+  --accent: #c9c5be;
+  --accent-hover: #e0dcd5;
+  --accent-soft: #2a2925;
+  --accent-line: #3e3d38;
+  --accent-ink: #1a1917;
+}
+
+// ── Density ──────────────────────────────────────────────────────────────────
+body.density-compact {
+  --row: 28px;
+  --pad: 14px;
+}
