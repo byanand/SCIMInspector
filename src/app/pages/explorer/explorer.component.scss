@@ -367,6 +367,12 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+
+  // Operations that send no body hide the editor rather than unmounting it —
+  // see the note in the template.
+  &.collapsed {
+    display: none;
+  }
 }
 
 .body-head {

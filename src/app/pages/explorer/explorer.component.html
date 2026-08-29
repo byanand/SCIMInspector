@@ -318,9 +318,14 @@
               </div>
             }
 
-            <!-- Body -->
-            @if (hasBody()) {
-              <div class="body-block">
+            <!-- Body.
+                 The editor stays mounted even for operations that send no body.
+                 <ngx-monaco-editor> disposes Monaco's shared standalone services
+                 on destroy, so unmounting it once poisons them for every editor
+                 mounted afterwards ("InstantiationService has been disposed").
+                 Hiding costs nothing and avoids rebuilding a heavy component on
+                 every GET/DELETE. -->
+            <div class="body-block" [class.collapsed]="!hasBody()">
                 <div class="body-head">
                   <span class="body-title">Body</span>
                   <span class="body-type mono">application/scim+json</span>
@@ -353,8 +358,7 @@
                     (ngModelChange)="requestBody.set($event)"
                     (onInit)="onMonacoInit($event)"></ngx-monaco-editor>
                 </div>
-              </div>
-            }
+            </div>
 
             <!-- Batch results -->
             @if (batchResults().length > 0) {
