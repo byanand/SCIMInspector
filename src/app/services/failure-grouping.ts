@@ -24,6 +24,19 @@ interface CauseRule {
  * root cause plus the concrete change that resolves it.
  */
 const RULES: CauseRule[] = [
+  // The two commonest real-world shapes, seen on live runs: the server answers
+  // 2xx but the data it returns is not the data it was sent. Both read as many
+  // unrelated attribute failures until they are grouped by what actually broke.
+  {
+    match: /does not match (the )?(POSTed|PUT|PATCH'd|PATCHed|submitted|sent)\b|returned \S+ .*does not match/i,
+    cause: 'Server does not echo back the values it was sent',
+    fix: "Create and update responses carry the server's own values rather than the ones submitted. Check whether this endpoint remaps attributes on write, or whether another sync overwrote them before the read-back.",
+  },
+  {
+    match: /succeeded but GET shows|is still \S+ after PATCH|change (was )?not persisted/i,
+    cause: 'PATCH reports success but the change is not persisted',
+    fix: 'The PATCH returned 2xx and the follow-up GET still shows the old value. Confirm the server applies PATCH synchronously, or allow for propagation delay before reading back.',
+  },
   {
     match: /requires? a path|no path.*multi|path.*multi-?valued/i,
     cause: 'PATCH replace needs an explicit path on multi-valued attributes',

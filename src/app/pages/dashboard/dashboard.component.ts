@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { TauriService } from '../../services/tauri.service';
 import { ServerConfigService } from '../../services/server-config.service';
 import { BusyService } from '../../services/busy.service';
+import { categoryLabel } from '../../services/validation-categories';
 import { UI } from '../../ui';
 import { TestRun, ValidationSummary, LoadTestSummary, CategorySummary } from '../../models';
 
@@ -115,7 +116,7 @@ export class DashboardComponent implements OnInit {
       .map((c) => {
         const pct = c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
         return {
-          name: c.name,
+          name: categoryLabel(c.name),
           ratio: `${c.passed}/${c.total}`,
           pct,
           color: pct === 100 ? 'var(--pass)' : pct >= 75 ? 'var(--warn)' : 'var(--fail)',

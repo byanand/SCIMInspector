@@ -8,6 +8,7 @@ import { NotificationService } from '../../services/notification.service';
 import { NavCountsService } from '../../services/nav-counts.service';
 import { BusyService } from '../../services/busy.service';
 import { groupFailures } from '../../services/failure-grouping';
+import { VALIDATION_CATEGORIES, categoryLabel } from '../../services/validation-categories';
 import { UI, TabDef } from '../../ui';
 import {
   ValidationResult,
@@ -51,18 +52,9 @@ export class ValidationComponent implements OnInit, OnDestroy {
   readonly groupJoiningProperty = signal('displayName');
   readonly configOpen = signal(false);
 
-  readonly categories = signal<CategoryToggle[]>([
-    { key: 'schema_discovery', label: 'Schema Discovery', enabled: true },
-    { key: 'users_crud', label: 'Users CRUD', enabled: true },
-    { key: 'groups_crud', label: 'Groups CRUD', enabled: true },
-    { key: 'patch_operations', label: 'PATCH Operations', enabled: true },
-    { key: 'filtering_pagination', label: 'Filtering & Pagination', enabled: true },
-    { key: 'duplicate_detection', label: 'Duplicate Detection (409)', enabled: true },
-    { key: 'soft_delete', label: 'Soft Delete (active=false)', enabled: true },
-    { key: 'group_operations', label: 'Group PATCH & Membership', enabled: true },
-    { key: 'field_mapping', label: 'Field Mapping Rules', enabled: true },
-    { key: 'custom_schema', label: 'Custom Schema Properties', enabled: true },
-  ]);
+  readonly categories = signal<CategoryToggle[]>(
+    VALIDATION_CATEGORIES.map((c) => ({ ...c, enabled: true }))
+  );
 
   readonly running = signal(false);
   readonly progress = signal<ValidationProgress | null>(null);
@@ -129,7 +121,7 @@ export class ValidationComponent implements OnInit, OnDestroy {
       const pct = c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
       const color = pct === 100 ? 'var(--pass)' : pct >= 75 ? 'var(--warn)' : 'var(--fail)';
       return {
-        name: c.name,
+        name: categoryLabel(c.name),
         ratio: `${c.passed}/${c.total}`,
         pct,
         color,
@@ -153,7 +145,7 @@ export class ValidationComponent implements OnInit, OnDestroy {
       const delta = before === null ? null : after - before;
 
       return {
-        name: c.name,
+        name: categoryLabel(c.name),
         before: before === null ? '—' : `${before}%`,
         after: `${after}%`,
         delta: delta === null ? 'new' : `${delta > 0 ? '+' : ''}${delta}%`,

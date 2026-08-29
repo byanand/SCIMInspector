@@ -7,6 +7,7 @@ import { PageHeaderService } from '../../services/page-header.service';
 import { NavCountsService } from '../../services/nav-counts.service';
 import { BusyService } from '../../services/busy.service';
 import { groupFailures, FailureGroup } from '../../services/failure-grouping';
+import { categoryLabel } from '../../services/validation-categories';
 import { UI, TabDef, Tone } from '../../ui';
 import {
   TestRun,
@@ -165,7 +166,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
       const pct = c.total > 0 ? Math.round((c.passed / c.total) * 100) : 0;
       const color = pct === 100 ? 'var(--pass)' : pct >= 75 ? 'var(--warn)' : 'var(--fail)';
       return {
-        name: c.name,
+        name: categoryLabel(c.name),
         ratio: `${c.passed}/${c.total}`,
         pct,
         color,

@@ -11,6 +11,8 @@
   display: flex;
   height: 100%;
   min-height: 0;
+  // Anchors the drawer when it has to overlay instead of push.
+  position: relative;
 }
 
 // ── Operation rail ───────────────────────────────────────────────────────────
@@ -805,6 +807,10 @@ app-tabs {
 }
 
 // ── Narrow ───────────────────────────────────────────────────────────────────
+// Two side-by-side panes need roughly 800px between them; below that the JSON
+// in Monaco wraps a token per line and stops being readable. So the split
+// stacks rather than shrinking — stacked, both panes keep the full width.
+// (Written out rather than @extend-ed: Sass cannot extend across media queries.)
 @media (max-width: 1100px) {
   .panes {
     grid-template-columns: 1fr;
@@ -815,8 +821,32 @@ app-tabs {
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
+}
 
+// The drawer costs 380px of work area. At the default 1280px window that
+// leaves ~200px per pane, so opening Schemas stacks the split too.
+@media (max-width: 1500px) {
+  .explorer.with-drawer .panes {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .explorer.with-drawer .pane:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+// Narrower still there is no room to push at all, so the drawer overlays the
+// work area. Hiding a panel the user just opened would read as a bug.
+@media (max-width: 1100px) {
   .drawer {
-    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 100%);
+    z-index: 5;
+    box-shadow: -1px 0 0 var(--line);
   }
 }

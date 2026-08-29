@@ -2,7 +2,7 @@
   <app-button icon="schema" (press)="schemaOpen.set(!schemaOpen())">Schemas</app-button>
 </ng-template>
 
-<div class="explorer">
+<div class="explorer" [class.with-drawer]="schemaOpen()">
   <!-- ══ OPERATION RAIL ══ -->
   <!-- Always visible: the redesign treats picking an operation as navigation,
        not as a step that hides itself once taken. -->

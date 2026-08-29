@@ -112,6 +112,61 @@ describe('groupFailures', () => {
     expect(groups[0].cause).toBe('No failure reason recorded');
   });
 
+  // These strings are verbatim from a live run against a real SCIM server.
+  // Before the echo/persistence rules existed, all six fell through to the raw
+  // fallback and triage reported "6 distinct causes" for what is really two.
+  it('groups the failure vocabulary a real server actually emits', () => {
+    const groups = groupFailures([
+      result({
+        test_name: 'Create user echoes userName',
+        failure_reason:
+          "Returned userName 'ramesh@example.com' does not match POSTed value 'scim_test_user_0141bb23@test.example.com'",
+      }),
+      result({
+        test_name: 'Create group echoes displayName',
+        failure_reason:
+          "Returned displayName 'Engineering Team' does not match POSTed value 'scim_test_group_7e3330ea'",
+      }),
+      result({
+        test_name: 'Patch group echoes displayName',
+        failure_reason:
+          "Returned displayName 'Engineering Team' does not match PATCH'd value 'scim_grpops_e7524e3e_patched'",
+      }),
+      result({
+        test_name: 'Patch title persists',
+        failure_reason:
+          "PATCH succeeded but GET shows title='Software Engineer' instead of 'Engineer'",
+      }),
+      result({
+        test_name: 'Patch displayName persists',
+        failure_reason:
+          "PATCH succeeded but GET shows displayName='John Doe' instead of 'Updated Patch User'",
+      }),
+      result({
+        test_name: 'Deactivate persists',
+        failure_reason: "User's 'active' is still true after PATCH to false",
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.cause)).toEqual([
+      'Server does not echo back the values it was sent',
+      'PATCH reports success but the change is not persisted',
+    ]);
+    expect(groups[0].tests).toHaveLength(3);
+    expect(groups[1].tests).toHaveLength(3);
+    expect(groups.every((g) => g.fix.length > 0)).toBe(true);
+  });
+
+  it('keeps an echo mismatch apart from a persistence failure', () => {
+    // Both mention PATCH; they are not the same problem.
+    const groups = groupFailures([
+      result({ failure_reason: "Returned displayName 'a' does not match PATCH'd value 'b'" }),
+      result({ failure_reason: "PATCH succeeded but GET shows title='a' instead of 'b'" }),
+    ]);
+    expect(groups).toHaveLength(2);
+  });
+
   it('truncates a very long unrecognised reason used as a heading', () => {
     const groups = groupFailures([result({ failure_reason: 'x'.repeat(400) })]);
     expect(groups[0].cause.length).toBeLessThanOrEqual(120);
